@@ -8,9 +8,10 @@ export default defineNuxtRouteMiddleware((to) => {
 
   const isAuthenticated = computed(() => !!user.value || isDemo.value)
 
+  const isPublicRoute = publicRoutes.includes(path) || path.startsWith('/store')
+
   // If user is not logged in and trying to access a private route, redirect to login
-  if (!isAuthenticated.value && !publicRoutes.includes(path)) {
-    if (path === '/') return navigateTo('/login')
+  if (!isAuthenticated.value && !isPublicRoute) {
     return navigateTo('/login')
   }
 
