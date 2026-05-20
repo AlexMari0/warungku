@@ -30,7 +30,6 @@ create policy "ai_knowledge_base: merchant isolation" on public.ai_knowledge_bas
 
 -- RPC for finding closest matching knowledge
 create or replace function public.match_merchant_knowledge(
-  p_merchant_id uuid,
   query_embedding vector(1536),
   match_threshold float,
   match_count int
@@ -49,7 +48,7 @@ as $$
     kb.content_payload,
     1 - (kb.embedding <=> query_embedding) as similarity
   from public.ai_knowledge_base kb
-  where kb.merchant_id = p_merchant_id
+  where kb.merchant_id = (select auth.uid()) -- Securely restrict to current authenticated user
     and 1 - (kb.embedding <=> query_embedding) > match_threshold
   order by kb.embedding <=> query_embedding
   limit match_count;

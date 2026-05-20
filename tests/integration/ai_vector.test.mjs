@@ -77,7 +77,6 @@ async function run() {
     const searchEmbedding = mockEmbedding(docText)
     
     const { data: matchData, error: matchErr } = await supabase.rpc('match_merchant_knowledge', {
-      p_merchant_id: userId,
       query_embedding: `[${searchEmbedding.join(',')}]`,
       match_threshold: -1, // Use -1 to guarantee we get something back even if floating point precision drops it to 0.999
       match_count: 5

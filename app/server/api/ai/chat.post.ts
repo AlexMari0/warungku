@@ -35,12 +35,23 @@ export default defineEventHandler(async (event) => {
 
   const supabase = await serverSupabaseClient(event)
 
-  // 1. Convert query text to a vector embedding (Mocked)
+  // 1. Verify that the session belongs to this user/merchant (prevent IDOR/BOLA)
+  const { data: activeSession, error: sessionErr } = await supabase
+    .from('ai_sessions')
+    .select('id')
+    .eq('id', session_id)
+    .eq('merchant_id', user.id)
+    .maybeSingle()
+
+  if (sessionErr || !activeSession) {
+    throw createError({ statusCode: 403, statusMessage: 'Forbidden: Session does not belong to this merchant' })
+  }
+
+  // 2. Convert query text to a vector embedding (Mocked)
   const queryEmbedding = mockEmbedding(query_text)
 
-  // 2. Perform similarity search in Postgres
+  // 3. Perform similarity search in Postgres
   const { data: matchedDocs, error: matchError } = await supabase.rpc('match_merchant_knowledge', {
-    p_merchant_id: user.id,
     query_embedding: `[${queryEmbedding.join(',')}]`,
     match_threshold: 0.1, // low threshold for testing mock data
     match_count: 3
