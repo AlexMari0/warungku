@@ -20,12 +20,35 @@ const submittings = ref(false)
 // Dialog states
 const isCategoriesModalOpen = ref(false)
 const isProductModalOpen = ref(false)
+const isDeleteModalOpen = ref(false)
 const editingProduct = ref<any | null>(null)
+const productToDelete = ref<any | null>(null)
 
 // Search & Filter state
 const searchQuery = ref('')
 const selectedCategory = ref<string>('all')
 const selectedStatus = ref<'all' | 'active' | 'inactive'>('all')
+
+// Pagination state
+const currentPage = ref(1)
+const itemsPerPage = ref(10)
+
+const totalItems = computed(() => filteredProducts.value.length)
+const totalPages = computed(() => Math.ceil(totalItems.value / itemsPerPage.value) || 1)
+const startIndex = computed(() => (currentPage.value - 1) * itemsPerPage.value)
+const endIndex = computed(() => startIndex.value + itemsPerPage.value)
+
+// Paginated products to display in the table
+const paginatedProducts = computed(() => {
+  const start = startIndex.value
+  const end = start + itemsPerPage.value
+  return filteredProducts.value.slice(start, end)
+})
+
+// Reset current page when filters change
+watch([searchQuery, selectedCategory, selectedStatus], () => {
+  currentPage.value = 1
+})
 
 // Preset units for convenience
 const unitOptions = ['pcs', 'box', 'pack', 'kg', 'gr', 'liter', 'ml', 'sachet', 'porsi']
@@ -313,7 +336,7 @@ async function onSubmitProduct(event: FormSubmitEvent<ProductSchema>) {
     }
 
     localStorage.setItem('warungku_products', JSON.stringify(list))
-    localStorage.setItem('warungku_movements', JSON.stringify(movementsList))
+    localStorage.setItem('warungku_movements', JSON.stringify(movementsList.slice(0, 100)))
     products.value = list
     isProductModalOpen.value = false
     resetProductForm()
@@ -427,48 +450,110 @@ async function onSubmitProduct(event: FormSubmitEvent<ProductSchema>) {
   }
 }
 
-// Toggle active status in real-time
+// Toggle active status in real-time with Undo/Cancel action
 async function toggleProductActive(product: any) {
-  if (isDemo.value) {
-    const newStatus = !product.is_active
-    const list = products.value.map(p => p.id === product.id ? { ...p, is_active: newStatus } : p)
-    localStorage.setItem('warungku_products', JSON.stringify(list))
-    products.value = list
-    product.is_active = newStatus
-    toast.add({
-      title: newStatus ? 'Produk Diaktifkan' : 'Produk Nonaktif',
-      description: `Produk "${product.name}" sekarang ${newStatus ? 'aktif' : 'tidak aktif'} (Mode Demo).`,
-      color: 'success'
-    })
-    return
+  const oldStatus = product.is_active
+  const newStatus = !product.is_active
+
+  async function performToggle(status: boolean, isUndo = false) {
+    if (isDemo.value) {
+      const list = products.value.map(p => p.id === product.id ? { ...p, is_active: status } : p)
+      localStorage.setItem('warungku_products', JSON.stringify(list))
+      products.value = list
+      product.is_active = status
+      if (!isUndo) {
+        showToggleToast(product, status)
+      } else {
+        toast.add({
+          title: 'Perubahan Dibatalkan',
+          description: `Status "${product.name}" berhasil dikembalikan ke ${status ? 'Aktif' : 'Nonaktif'} (Mode Demo).`,
+          color: 'success'
+        })
+      }
+      return
+    }
+
+    try {
+      const { error } = await (supabase.from('products') as any)
+        .update({ is_active: status })
+        .eq('id', product.id)
+
+      if (error) throw error
+      product.is_active = status
+
+      if (!isUndo) {
+        showToggleToast(product, status)
+      } else {
+        toast.add({
+          title: 'Perubahan Dibatalkan',
+          description: `Status "${product.name}" berhasil dikembalikan ke ${status ? 'Aktif' : 'Nonaktif'}.`,
+          color: 'success'
+        })
+      }
+    } catch (err: any) {
+      toast.add({
+        title: 'Gagal mengubah status',
+        description: err.message,
+        color: 'error'
+      })
+      // Revert in UI if db fails
+      product.is_active = !status
+    }
   }
 
-  try {
-    const newStatus = !product.is_active
-    const { error } = await (supabase.from('products') as any)
-      .update({ is_active: newStatus })
-      .eq('id', product.id)
-
-    if (error) throw error
-    product.is_active = newStatus
-
+  function showToggleToast(prod: any, status: boolean) {
+    const statusText = status ? 'Active' : 'Inactive'
     toast.add({
-      title: newStatus ? 'Produk Diaktifkan' : 'Produk Nonaktif',
-      description: `Produk "${product.name}" sekarang ${newStatus ? 'aktif' : 'tidak aktif'}.`,
-      color: 'success'
-    })
-  } catch (err: any) {
-    toast.add({
-      title: 'Gagal mengubah status',
-      description: err.message,
-      color: 'error'
+      title: status ? 'Produk Diaktifkan' : 'Produk Nonaktif',
+      description: `The status of ${prod.name} has been changed to ${statusText}.`,
+      color: 'success',
+      actions: [
+        {
+          label: 'Cancel/Undo',
+          color: 'neutral',
+          variant: 'subtle',
+          onClick: () => {
+            performToggle(!status, true)
+          }
+        }
+      ]
     })
   }
+
+  // Trigger initial toggle
+  await performToggle(newStatus, false)
 }
 
-// Delete product
-async function deleteProduct(product: any) {
-  if (!confirm(`Apakah Anda yakin ingin menghapus produk "${product.name}"? Operasi ini tidak dapat dibatalkan.`)) {
+// Delete product dialog triggers
+function confirmDeleteProduct(product: any) {
+  productToDelete.value = product
+  isDeleteModalOpen.value = true
+}
+
+// Actual deletion execution
+async function executeDeleteProduct() {
+  if (!productToDelete.value) return
+  const product = productToDelete.value
+  isDeleteModalOpen.value = false
+
+  if (isDemo.value) {
+    try {
+      const list = products.value.filter(p => p.id !== product.id)
+      localStorage.setItem('warungku_products', JSON.stringify(list))
+      products.value = list
+      toast.add({
+        title: 'Produk dihapus',
+        description: `Produk "${product.name}" berhasil dihapus (Mode Demo).`,
+        color: 'success'
+      })
+      productToDelete.value = null
+    } catch (err: any) {
+      toast.add({
+        title: 'Gagal menghapus produk',
+        description: err.message,
+        color: 'error'
+      })
+    }
     return
   }
 
@@ -491,6 +576,8 @@ async function deleteProduct(product: any) {
       description: 'Produk tidak dapat dihapus jika memiliki mutasi stok atau order terkait. Silakan nonaktifkan saja.',
       color: 'error'
     })
+  } finally {
+    productToDelete.value = null
   }
 }
 
@@ -520,7 +607,7 @@ onMounted(() => {
           />
           Sistem Manajemen Logistik
         </div>
-        <h1 class="text-4xl md:text-5xl font-black text-zinc-950 dark:text-zinc-5 tracking-tighter leading-[1.05]">
+        <h1 class="text-4xl md:text-5xl font-black text-zinc-950 dark:text-zinc-50 tracking-tighter leading-[1.05]">
           Manajemen Inventaris
         </h1>
         <p class="text-base text-zinc-500 dark:text-zinc-400 leading-relaxed max-w-[60ch]">
@@ -558,7 +645,7 @@ onMounted(() => {
           :animate="{ opacity: 1, y: 0 }"
           :transition="{ duration: 0.6, type: 'spring', bounce: 0.15, delay: 0.1 }"
         >
-          <div class="bg-zinc-950 dark:bg-zinc-900 border border-zinc-850 dark:border-zinc-800 p-8 rounded-[2rem] shadow-[0_20px_40px_-15px_rgba(0,0,0,0.15)] flex flex-col justify-between min-h-[180px] group transition-all duration-500 hover:-translate-y-1">
+          <div class="bg-zinc-950 dark:bg-zinc-900 border border-zinc-800 dark:border-zinc-800/80 p-8 rounded-[2rem] shadow-[0_20px_40px_-15px_rgba(0,0,0,0.15)] flex flex-col justify-between min-h-[180px] group transition-all duration-500 hover:-translate-y-1">
             <div class="flex items-start justify-between w-full">
               <div class="flex flex-col gap-1">
                 <span class="text-xs font-mono tracking-wider uppercase text-zinc-400">Nilai Aset Inventaris</span>
@@ -566,12 +653,16 @@ onMounted(() => {
                   {{ formatRupiah(stats.valuation) }}
                 </h3>
               </div>
-              <div class="size-10 rounded-xl bg-zinc-800 text-zinc-300 flex items-center justify-center border border-zinc-700/50">
-                <UIcon
-                  name="i-lucide-coins"
-                  class="size-5"
+              <UTooltip text="Buka Riwayat Mutasi Stok" :ui="{ content: 'max-w-fit' }">
+                <UButton
+                  to="/stock/movements"
+                  icon="i-lucide-history"
+                  color="neutral"
+                  variant="subtle"
+                  label="Riwayat Mutasi"
+                  class="rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/50 active:scale-95 transition-all text-xs font-semibold px-3 py-1.5 flex items-center gap-1.5"
                 />
-              </div>
+              </UTooltip>
             </div>
             <div class="flex items-center gap-2 text-xs text-zinc-400 mt-4 font-mono">
               <span class="size-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -587,13 +678,25 @@ onMounted(() => {
           :animate="{ opacity: 1, y: 0 }"
           :transition="{ duration: 0.6, type: 'spring', bounce: 0.15, delay: 0.2 }"
         >
-          <div class="bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 p-8 rounded-[2rem] shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] flex flex-col justify-between min-h-[180px] group transition-all duration-500 hover:-translate-y-1">
+          <div
+            class="p-8 rounded-[2rem] flex flex-col justify-between min-h-[180px] group transition-all duration-500 hover:-translate-y-1 border"
+            :class="[
+              stats.lowStock > 0
+                ? 'bg-rose-50 dark:bg-rose-950/20 border-rose-300 dark:border-rose-800/80 shadow-[0_20px_40px_-15px_rgba(244,63,94,0.08)]'
+                : 'bg-zinc-50/40 dark:bg-zinc-900/30 border-zinc-200/60 dark:border-zinc-800 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.04)]'
+            ]"
+          >
             <div class="flex items-start justify-between w-full">
               <div class="flex flex-col gap-1">
-                <span class="text-xs font-mono tracking-wider uppercase text-zinc-500 dark:text-zinc-400">Peringatan Restock</span>
+                <span
+                  class="text-xs font-mono tracking-wider uppercase"
+                  :class="[stats.lowStock > 0 ? 'text-rose-600/80 dark:text-rose-400' : 'text-zinc-500 dark:text-zinc-400']"
+                >
+                  Peringatan Restock
+                </span>
                 <h3
                   class="text-4xl font-black tracking-tight mt-1"
-                  :class="[stats.lowStock > 0 ? 'text-rose-500' : 'text-zinc-950 dark:text-zinc-5 font-mono']"
+                  :class="[stats.lowStock > 0 ? 'text-rose-500 font-mono' : 'text-zinc-950 dark:text-zinc-50 font-mono']"
                 >
                   {{ stats.lowStock }}
                 </h3>
@@ -628,30 +731,36 @@ onMounted(() => {
           :animate="{ opacity: 1, y: 0 }"
           :transition="{ duration: 0.6, type: 'spring', bounce: 0.15, delay: 0.3 }"
         >
-          <div class="bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 p-8 rounded-[2rem] shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] flex flex-col justify-between min-h-[180px] group transition-all duration-500 hover:-translate-y-1">
+          <div class="bg-zinc-950 dark:bg-zinc-900 border border-zinc-800 dark:border-zinc-800/80 p-8 rounded-[2rem] shadow-[0_20px_40px_-15px_rgba(0,0,0,0.15)] flex flex-col justify-between min-h-[180px] group transition-all duration-500 hover:-translate-y-1">
             <div class="flex items-start justify-between w-full h-full">
-              <div class="flex flex-col gap-4 w-full justify-center h-full">
-                <div class="flex items-center justify-between w-full border-b border-zinc-100 dark:border-zinc-800/80 pb-3">
-                  <div class="flex flex-col">
-                    <span class="text-[10px] font-mono tracking-wider uppercase text-zinc-400">Total Produk</span>
-                    <span class="text-xl font-black text-zinc-950 dark:text-zinc-5 font-mono">{{ stats.totalProducts }}</span>
+              <div class="grid grid-cols-2 gap-4 w-full h-full items-center">
+                <!-- Total Produk -->
+                <div class="flex flex-col gap-1 border-r border-zinc-800/80 pr-4">
+                  <span class="text-xs font-mono tracking-wider uppercase text-zinc-400">Total Produk</span>
+                  <div class="flex items-baseline gap-2 mt-1">
+                    <span class="text-3xl font-black text-white font-mono">{{ stats.totalProducts }}</span>
+                    <UIcon
+                      name="i-lucide-package"
+                      class="size-4.5 text-zinc-400 shrink-0 group-hover:scale-110 transition-transform duration-300"
+                    />
                   </div>
-                  <UIcon
-                    name="i-lucide-package"
-                    class="size-4 text-zinc-400 animate-pulse"
-                  />
                 </div>
-                <div class="flex items-center justify-between w-full">
-                  <div class="flex flex-col">
-                    <span class="text-[10px] font-mono tracking-wider uppercase text-zinc-400">Kategori Katalog</span>
-                    <span class="text-xl font-black text-zinc-950 dark:text-zinc-5 font-mono">{{ stats.totalCategories }}</span>
+                <!-- Kategori Katalog -->
+                <div class="flex flex-col gap-1 pl-2">
+                  <span class="text-xs font-mono tracking-wider uppercase text-zinc-400">Kategori</span>
+                  <div class="flex items-baseline gap-2 mt-1">
+                    <span class="text-3xl font-black text-white font-mono">{{ stats.totalCategories }}</span>
+                    <UIcon
+                      name="i-lucide-tags"
+                      class="size-4.5 text-zinc-400 shrink-0 group-hover:scale-110 transition-transform duration-300"
+                    />
                   </div>
-                  <UIcon
-                    name="i-lucide-tags"
-                    class="size-4 text-zinc-400"
-                  />
                 </div>
               </div>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-zinc-400 mt-4 font-mono">
+              <span class="size-2 rounded-full bg-emerald-500 animate-pulse" />
+              Sesuai katalog terdaftar
             </div>
           </div>
         </Motion>
@@ -745,38 +854,38 @@ onMounted(() => {
       >
         <table class="w-full border-collapse text-left">
           <thead>
-            <tr class="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-850/50 text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-              <th class="py-5 px-6">
+            <tr class="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+              <th class="py-2.5 px-6">
                 Detail Produk
               </th>
-              <th class="py-5 px-4">
+              <th class="py-2.5 px-4">
                 Kategori
               </th>
-              <th class="py-5 px-4 text-right">
+              <th class="py-2.5 px-4 text-right">
                 Harga Beli
               </th>
-              <th class="py-5 px-4 text-right">
+              <th class="py-2.5 px-4 text-right">
                 Harga Jual
               </th>
-              <th class="py-5 px-4 text-center">
+              <th class="py-2.5 px-4 text-center">
                 Stok
               </th>
-              <th class="py-5 px-4 text-center">
+              <th class="py-2.5 px-4 text-center">
                 Status
               </th>
-              <th class="py-5 px-6 text-center">
+              <th class="py-2.5 px-6 text-center">
                 Aksi
               </th>
             </tr>
           </thead>
           <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800/80">
             <tr
-              v-for="p in filteredProducts"
+              v-for="p in paginatedProducts"
               :key="p.id"
-              class="hover:bg-zinc-50/50 dark:hover:bg-zinc-850/30 transition-colors group"
+              class="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors group"
             >
               <!-- Info Name / SKU -->
-              <td class="py-4 px-6">
+              <td class="py-2.5 px-6">
                 <div class="flex items-center gap-3">
                   <!-- Product Image / Default -->
                   <div class="size-10 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200/40 dark:border-zinc-700/50 shrink-0 overflow-hidden flex items-center justify-center">
@@ -815,7 +924,7 @@ onMounted(() => {
               </td>
 
               <!-- Category Badge -->
-              <td class="py-4 px-4">
+              <td class="py-2.5 px-4">
                 <div
                   v-if="p.categories"
                   class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold border border-zinc-200/50 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-800/50"
@@ -833,17 +942,17 @@ onMounted(() => {
               </td>
 
               <!-- Buy Price -->
-              <td class="py-4 px-4 text-right font-mono text-sm text-zinc-600 dark:text-zinc-300">
+              <td class="py-2.5 px-4 text-right font-bold font-mono text-sm text-zinc-500 dark:text-zinc-400">
                 {{ formatRupiah(p.buy_price) }}
               </td>
 
               <!-- Sell Price -->
-              <td class="py-4 px-4 text-right font-black font-mono text-sm text-zinc-900 dark:text-zinc-50">
+              <td class="py-2.5 px-4 text-right font-bold font-mono text-sm text-zinc-950 dark:text-zinc-50">
                 {{ formatRupiah(p.sell_price) }}
               </td>
 
               <!-- Stock Quantity -->
-              <td class="py-4 px-4 text-center">
+              <td class="py-2.5 px-4 text-center">
                 <div class="inline-flex flex-col items-center">
                   <span class="text-sm font-black font-mono text-zinc-900 dark:text-zinc-50">
                     {{ p.stock_qty }} <span class="text-xs text-zinc-500 dark:text-zinc-400 font-normal font-sans">{{ p.unit }}</span>
@@ -858,7 +967,7 @@ onMounted(() => {
               </td>
 
               <!-- Status Toggle -->
-              <td class="py-4 px-4 text-center">
+              <td class="py-2.5 px-4 text-center">
                 <USwitch
                   :model-value="p.is_active"
                   size="sm"
@@ -869,8 +978,8 @@ onMounted(() => {
               </td>
 
               <!-- Actions -->
-              <td class="py-4 px-6 text-center">
-                <div class="flex items-center justify-center gap-1.5">
+              <td class="py-2.5 px-6 text-center">
+                <div class="flex items-center justify-center gap-3">
                   <UButton
                     icon="i-lucide-pencil"
                     color="neutral"
@@ -885,13 +994,46 @@ onMounted(() => {
                     variant="subtle"
                     size="xs"
                     class="rounded-xl border border-rose-200/30 dark:border-rose-900/30 shadow-sm active:scale-95 transition-transform"
-                    @click="deleteProduct(p)"
+                    @click="confirmDeleteProduct(p)"
                   />
                 </div>
               </td>
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Pagination Footer -->
+      <div class="px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4 bg-zinc-50/50 dark:bg-zinc-900/50">
+        <div class="text-xs font-semibold text-zinc-500 dark:text-zinc-400 font-sans">
+          Menampilkan <span class="font-bold text-zinc-900 dark:text-zinc-50 font-mono">{{ totalItems > 0 ? startIndex + 1 : 0 }}-{{ Math.min(endIndex, totalItems) }}</span> dari <span class="font-bold text-zinc-900 dark:text-zinc-50 font-mono">{{ totalItems }}</span> produk
+        </div>
+        
+        <div class="flex items-center gap-2">
+          <UButton
+            icon="i-lucide-chevron-left"
+            color="neutral"
+            variant="subtle"
+            size="xs"
+            :disabled="currentPage === 1"
+            class="rounded-xl border border-zinc-200 dark:border-zinc-850 shadow-sm active:scale-95 transition-transform"
+            @click="currentPage--"
+          />
+          
+          <div class="text-xs font-mono font-bold text-zinc-700 dark:text-zinc-300 px-2.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200/30 dark:border-zinc-700/30">
+            Halaman {{ currentPage }} / {{ totalPages }}
+          </div>
+          
+          <UButton
+            icon="i-lucide-chevron-right"
+            color="neutral"
+            variant="subtle"
+            size="xs"
+            :disabled="currentPage === totalPages"
+            class="rounded-xl border border-zinc-200 dark:border-zinc-850 shadow-sm active:scale-95 transition-transform"
+            @click="currentPage++"
+          />
+        </div>
       </div>
     </div>
 
@@ -902,6 +1044,44 @@ onMounted(() => {
       v-model:open="isCategoriesModalOpen"
       @saved="fetchData"
     />
+
+    <!-- 2. Product Delete Confirmation Modal -->
+    <UModal
+      v-model:open="isDeleteModalOpen"
+      title="Konfirmasi Hapus Produk"
+      class="max-w-md"
+    >
+      <template #body>
+        <div class="space-y-4 font-sans">
+          <div class="flex items-center gap-3 text-rose-500 bg-rose-50 dark:bg-rose-950/20 border border-rose-200/50 dark:border-rose-800/50 p-4 rounded-2xl">
+            <UIcon name="i-lucide-alert-triangle" class="size-6 shrink-0" />
+            <div class="text-xs font-semibold leading-relaxed">
+              Tindakan ini akan menghapus produk permanen dan dapat merusak riwayat transaksi/mutasi stok.
+            </div>
+          </div>
+          
+          <div class="text-sm text-zinc-650 dark:text-zinc-300">
+            Apakah Anda yakin ingin menghapus produk <span class="font-bold text-zinc-900 dark:text-white">"{{ productToDelete?.name }}"</span>? Operasi ini tidak dapat dibatalkan.
+          </div>
+          
+          <div class="flex items-center justify-end gap-3 pt-4 border-t border-zinc-100 dark:border-zinc-800/80">
+            <UButton
+              label="Batal"
+              color="neutral"
+              variant="subtle"
+              class="rounded-xl font-bold border border-zinc-200 dark:border-zinc-800 active:scale-95 transition-all duration-300"
+              @click="isDeleteModalOpen = false"
+            />
+            <UButton
+              label="Hapus Permanen"
+              color="error"
+              class="rounded-xl font-bold active:scale-95 transition-all duration-300"
+              @click="executeDeleteProduct"
+            />
+          </div>
+        </div>
+      </template>
+    </UModal>
 
     <!-- 2. Product Add/Edit Dialog -->
     <UModal

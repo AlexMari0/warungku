@@ -1,8 +1,39 @@
--- =============================================================================
--- MODULE 3: Analytics Aggregation RPC
--- Populates the daily_summaries, hourly_traffic, product_sales_summary, and
--- payment_method_summary tables from raw orders and payments.
--- =============================================================================
+-- Fix timezone double-conversion bug
+
+create or replace function public.track_storefront_event(p_slug text, p_event_type text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_merchant_id uuid;
+  v_storefront_id uuid;
+  v_date date := (now() at time zone 'Asia/Jakarta')::date;
+begin
+  select id, merchant_id into v_storefront_id, v_merchant_id
+  from public.storefronts
+  where slug = p_slug and is_published = true;
+
+  if v_storefront_id is null then
+    return;
+  end if;
+
+  if p_event_type = 'page_view' then
+    insert into public.storefront_analytics (merchant_id, storefront_id, summary_date, page_views, whatsapp_clicks)
+    values (v_merchant_id, v_storefront_id, v_date, 1, 0)
+    on conflict (merchant_id, storefront_id, summary_date)
+    do update set page_views = public.storefront_analytics.page_views + 1;
+    
+  elsif p_event_type = 'whatsapp_click' then
+    insert into public.storefront_analytics (merchant_id, storefront_id, summary_date, page_views, whatsapp_clicks)
+    values (v_merchant_id, v_storefront_id, v_date, 0, 1)
+    on conflict (merchant_id, storefront_id, summary_date)
+    do update set whatsapp_clicks = public.storefront_analytics.whatsapp_clicks + 1;
+    
+  end if;
+end;
+$$;
 
 create or replace function public.refresh_merchant_analytics(p_merchant_id uuid, p_date date)
 returns void
@@ -41,7 +72,7 @@ begin
   left join public.products p on p.id = oi.product_id
   where o.merchant_id = p_merchant_id
     and o.status = 'paid'
-    and (o.created_at at time zone 'UTC' at time zone 'Asia/Jakarta')::date = p_date;
+    and (o.created_at at time zone 'Asia/Jakarta')::date = p_date;
 
   v_gross_profit := v_total_revenue - v_total_cogs;
   
@@ -55,7 +86,7 @@ begin
   join public.orders o on o.id = pay.order_id
   where o.merchant_id = p_merchant_id
     and o.status = 'paid'
-    and (o.created_at at time zone 'UTC' at time zone 'Asia/Jakarta')::date = p_date
+    and (o.created_at at time zone 'Asia/Jakarta')::date = p_date
   group by pay.method
   order by count(*) desc
   limit 1;
@@ -72,7 +103,7 @@ begin
   from public.online_orders o
   join public.storefronts sf on sf.id = o.storefront_id
   where sf.merchant_id = p_merchant_id
-    and (o.created_at at time zone 'UTC' at time zone 'Asia/Jakarta')::date = p_date;
+    and (o.created_at at time zone 'Asia/Jakarta')::date = p_date;
 
   -- Upsert daily_summaries
   insert into public.daily_summaries (
@@ -102,24 +133,19 @@ begin
   select 
     p_merchant_id,
     p_date,
-    extract(hour from (o.created_at at time zone 'UTC' at time zone 'Asia/Jakarta'))::integer as h,
+    extract(hour from (o.created_at at time zone 'Asia/Jakarta'))::integer as h,
     count(o.id),
     sum(o.total_amount)
   from public.orders o
   where o.merchant_id = p_merchant_id
     and o.status = 'paid'
-    and (o.created_at at time zone 'UTC' at time zone 'Asia/Jakarta')::date = p_date
+    and (o.created_at at time zone 'Asia/Jakarta')::date = p_date
   group by h
   on conflict (merchant_id, traffic_date, hour_of_day) do update set
     transaction_count = excluded.transaction_count,
     revenue = excluded.revenue;
 
-  -- 3. Compute Product Sales Summary (Daily)
-  -- For this scope we will only compute 'daily' to avoid heavy month-to-date calculation loops,
-  -- but normally you'd run weekly/monthly agg as well. 
-  -- For now, we populate 'daily' for the given date, and 'monthly' for the month start.
-  
-  -- Monthly
+  -- 3. Compute Product Sales Summary (Monthly)
   insert into public.product_sales_summary (
     merchant_id, product_id, period_type, period_start, quantity_sold, revenue, cogs, gross_profit
   )
@@ -137,7 +163,7 @@ begin
   join public.products p on p.id = oi.product_id
   where o.merchant_id = p_merchant_id
     and o.status = 'paid'
-    and date_trunc('month', (o.created_at at time zone 'UTC' at time zone 'Asia/Jakarta')::date) = date_trunc('month', p_date)::date
+    and date_trunc('month', (o.created_at at time zone 'Asia/Jakarta')::date) = date_trunc('month', p_date)::date
   group by oi.product_id
   on conflict (merchant_id, product_id, period_type, period_start) do update set
     quantity_sold = excluded.quantity_sold,
@@ -145,7 +171,7 @@ begin
     cogs = excluded.cogs,
     gross_profit = excluded.gross_profit;
     
-  -- Daily
+  -- 3. Compute Product Sales Summary (Daily)
   insert into public.product_sales_summary (
     merchant_id, product_id, period_type, period_start, quantity_sold, revenue, cogs, gross_profit
   )
@@ -163,7 +189,7 @@ begin
   join public.products p on p.id = oi.product_id
   where o.merchant_id = p_merchant_id
     and o.status = 'paid'
-    and (o.created_at at time zone 'UTC' at time zone 'Asia/Jakarta')::date = p_date
+    and (o.created_at at time zone 'Asia/Jakarta')::date = p_date
   group by oi.product_id
   on conflict (merchant_id, product_id, period_type, period_start) do update set
     quantity_sold = excluded.quantity_sold,
@@ -171,7 +197,7 @@ begin
     cogs = excluded.cogs,
     gross_profit = excluded.gross_profit;
 
-  -- 4. Compute Payment Method Summary (Monthly & Daily)
+  -- 4. Compute Payment Method Summary (Monthly)
   insert into public.payment_method_summary (
     merchant_id, period_start, period_type, method, transaction_count, total_amount
   )
@@ -186,12 +212,13 @@ begin
   join public.orders o on o.id = pay.order_id
   where o.merchant_id = p_merchant_id
     and o.status = 'paid'
-    and date_trunc('month', (o.created_at at time zone 'UTC' at time zone 'Asia/Jakarta')::date) = date_trunc('month', p_date)::date
+    and date_trunc('month', (o.created_at at time zone 'Asia/Jakarta')::date) = date_trunc('month', p_date)::date
   group by pay.method
   on conflict (merchant_id, period_type, period_start, method) do update set
     transaction_count = excluded.transaction_count,
     total_amount = excluded.total_amount;
     
+  -- 4. Compute Payment Method Summary (Daily)
   insert into public.payment_method_summary (
     merchant_id, period_start, period_type, method, transaction_count, total_amount
   )
@@ -206,7 +233,7 @@ begin
   join public.orders o on o.id = pay.order_id
   where o.merchant_id = p_merchant_id
     and o.status = 'paid'
-    and (o.created_at at time zone 'UTC' at time zone 'Asia/Jakarta')::date = p_date
+    and (o.created_at at time zone 'Asia/Jakarta')::date = p_date
   group by pay.method
   on conflict (merchant_id, period_type, period_start, method) do update set
     transaction_count = excluded.transaction_count,

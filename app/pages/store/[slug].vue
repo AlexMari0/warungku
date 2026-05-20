@@ -306,6 +306,18 @@ async function handleCheckout() {
       color: 'success'
     })
 
+    // Track whatsapp click
+    if (!isDemoStore.value) {
+      try {
+        await (supabase as any).rpc('track_storefront_event', {
+          p_slug: slug.value,
+          p_event_type: 'whatsapp_click'
+        })
+      } catch (e) {
+        // Silently fail analytics tracking
+      }
+    }
+
     // Auto-open WhatsApp link after checkout commit
     window.open(generatedWhatsAppLink.value, '_blank')
   } catch (err: any) {
@@ -332,58 +344,163 @@ function resetOrderProcess() {
 // Color Theme helper classes mapping
 const activeThemeClasses = computed(() => {
   const theme = storeInfo.value?.theme_color || 'emerald'
-  const maps: Record<string, { primaryText: string; primaryBg: string; buttonBg: string; buttonBgHover: string; ringColor: string }> = {
+  const maps: Record<string, {
+    primaryText: string
+    primaryBg: string
+    buttonBg: string
+    buttonBgHover: string
+    ringColor: string
+    accentBorder: string
+    hoverBorder: string
+    glowShadow: string
+    glowGlow: string
+    textColor: string
+    bgLight: string
+  }> = {
     emerald: {
       primaryText: 'text-emerald-600 dark:text-emerald-400',
       primaryBg: 'bg-emerald-50 dark:bg-emerald-950/30',
       buttonBg: 'bg-emerald-600 hover:bg-emerald-700',
       buttonBgHover: 'hover:bg-emerald-700',
-      ringColor: 'focus:ring-emerald-500/30'
+      ringColor: 'focus:ring-emerald-500/30',
+      accentBorder: 'border-emerald-500/20 dark:border-emerald-400/20',
+      hoverBorder: 'hover:border-emerald-500/40 dark:hover:border-emerald-400/40',
+      glowShadow: 'shadow-emerald-500/5 dark:shadow-emerald-400/5',
+      glowGlow: 'rgba(16,185,129,0.12)',
+      textColor: 'text-emerald-500',
+      bgLight: 'bg-emerald-500/10'
     },
     sky: {
       primaryText: 'text-sky-600 dark:text-sky-400',
       primaryBg: 'bg-sky-50 dark:bg-sky-950/30',
       buttonBg: 'bg-sky-600 hover:bg-sky-700',
       buttonBgHover: 'hover:bg-sky-700',
-      ringColor: 'focus:ring-sky-500/30'
+      ringColor: 'focus:ring-sky-500/30',
+      accentBorder: 'border-sky-500/20 dark:border-sky-400/20',
+      hoverBorder: 'hover:border-sky-500/40 dark:hover:border-sky-400/40',
+      glowShadow: 'shadow-sky-500/5 dark:shadow-sky-400/5',
+      glowGlow: 'rgba(14,165,233,0.12)',
+      textColor: 'text-sky-500',
+      bgLight: 'bg-sky-500/10'
     },
     amber: {
       primaryText: 'text-amber-600 dark:text-amber-400',
       primaryBg: 'bg-amber-50 dark:bg-amber-950/30',
       buttonBg: 'bg-amber-600 hover:bg-amber-700',
       buttonBgHover: 'hover:bg-amber-700',
-      ringColor: 'focus:ring-amber-500/30'
+      ringColor: 'focus:ring-amber-500/30',
+      accentBorder: 'border-amber-500/20 dark:border-amber-400/20',
+      hoverBorder: 'hover:border-amber-500/40 dark:hover:border-amber-400/40',
+      glowShadow: 'shadow-amber-500/5 dark:shadow-amber-400/5',
+      glowGlow: 'rgba(245,158,11,0.12)',
+      textColor: 'text-amber-500',
+      bgLight: 'bg-amber-500/10'
     },
     rose: {
       primaryText: 'text-rose-600 dark:text-rose-400',
       primaryBg: 'bg-rose-50 dark:bg-rose-950/30',
       buttonBg: 'bg-rose-600 hover:bg-rose-700',
       buttonBgHover: 'hover:bg-rose-700',
-      ringColor: 'focus:ring-rose-500/30'
+      ringColor: 'focus:ring-rose-500/30',
+      accentBorder: 'border-rose-500/20 dark:border-rose-400/20',
+      hoverBorder: 'hover:border-rose-500/40 dark:hover:border-rose-400/40',
+      glowShadow: 'shadow-rose-500/5 dark:shadow-rose-400/5',
+      glowGlow: 'rgba(244,63,94,0.12)',
+      textColor: 'text-rose-500',
+      bgLight: 'bg-rose-500/10'
     },
     slate: {
       primaryText: 'text-slate-600 dark:text-slate-400',
       primaryBg: 'bg-slate-50 dark:bg-slate-950/30',
       buttonBg: 'bg-slate-600 hover:bg-slate-700',
       buttonBgHover: 'hover:bg-slate-700',
-      ringColor: 'focus:ring-slate-500/30'
+      ringColor: 'focus:ring-slate-500/30',
+      accentBorder: 'border-slate-500/20 dark:border-slate-400/20',
+      hoverBorder: 'hover:border-slate-500/40 dark:hover:border-slate-400/40',
+      glowShadow: 'shadow-slate-500/5 dark:shadow-slate-400/5',
+      glowGlow: 'rgba(100,116,139,0.12)',
+      textColor: 'text-slate-500',
+      bgLight: 'bg-slate-500/10'
     }
   }
+  if (theme.startsWith('#')) {
+    return {
+      primaryText: '',
+      primaryBg: '',
+      buttonBg: '',
+      buttonBgHover: '',
+      ringColor: '',
+      accentBorder: '',
+      hoverBorder: '',
+      glowShadow: '',
+      glowGlow: theme + '1F', // ~12% opacity hex
+      textColor: '',
+      bgLight: '',
+      isCustom: true,
+      customColor: theme
+    }
+  }
+
   const result = maps[theme] || maps.emerald
-  return result as { primaryText: string; primaryBg: string; buttonBg: string; buttonBgHover: string; ringColor: string }
+  return {
+    ...result,
+    isCustom: false,
+    customColor: ''
+  } as {
+    primaryText: string
+    primaryBg: string
+    buttonBg: string
+    buttonBgHover: string
+    ringColor: string
+    accentBorder: string
+    hoverBorder: string
+    glowShadow: string
+    glowGlow: string
+    textColor: string
+    bgLight: string
+    isCustom: boolean
+    customColor: string
+  }
 })
 
-onMounted(() => {
-  fetchStorefront()
+onMounted(async () => {
+  await fetchStorefront()
+  
+  // Track page view for non-demo storefronts
+  if (!isDemoStore.value && storeInfo.value) {
+    try {
+      await (supabase as any).rpc('track_storefront_event', {
+        p_slug: slug.value,
+        p_event_type: 'page_view'
+      })
+    } catch (e) {
+      // Silently fail analytics tracking
+    }
+  }
 })
 </script>
 
 <template>
-  <div class="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-default transition-colors overflow-x-hidden font-sans">
+  <div class="relative min-h-screen bg-zinc-50 dark:bg-zinc-950 text-default transition-colors overflow-x-hidden font-sans">
+    
+    <!-- PREMIUM AMBIENT RADIAL GLOW BACKDROP -->
+    <div
+      class="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[500px] pointer-events-none z-0 transition-all duration-500 opacity-0 dark:opacity-100"
+      :style="[
+        !activeThemeClasses.isCustom
+          ? { background: `radial-gradient(circle at 50% 0%, ${activeThemeClasses.glowGlow} 0%, transparent 70%)` }
+          : { background: `radial-gradient(circle at 50% 0%, ${activeThemeClasses.customColor}14 0%, transparent 70%)` }
+      ]"
+    ></div>
     
     <!-- LOADING SCREEN -->
     <div v-if="loading" class="min-h-screen flex flex-col items-center justify-center gap-3">
-      <UIcon name="i-lucide-loader" class="size-8 text-emerald-500 animate-spin" />
+      <UIcon
+        name="i-lucide-loader"
+        class="size-8 animate-spin"
+        :class="[!activeThemeClasses.isCustom ? activeThemeClasses.textColor : '']"
+        :style="activeThemeClasses.isCustom ? { color: activeThemeClasses.customColor } : {}"
+      />
       <span class="text-xs text-muted font-mono uppercase tracking-widest">Menghubungkan ke toko online...</span>
     </div>
 
@@ -416,14 +533,49 @@ onMounted(() => {
       <!-- STICKY GLASSMORPHIC TOP NAVBAR -->
       <nav class="sticky top-0 z-30 border-b border-default backdrop-blur-md bg-white/75 dark:bg-zinc-950/75 px-4 md:px-8 py-3.5 flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <div class="size-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-            <UIcon name="i-lucide-store" class="size-4 text-emerald-500" />
+          <div
+            class="size-8 rounded-lg flex items-center justify-center"
+            :class="[!activeThemeClasses.isCustom ? activeThemeClasses.bgLight : '']"
+            :style="activeThemeClasses.isCustom ? { backgroundColor: activeThemeClasses.customColor + '1A' } : {}"
+          >
+            <UIcon
+              name="i-lucide-store"
+              class="size-4"
+              :class="[!activeThemeClasses.isCustom ? activeThemeClasses.textColor : '']"
+              :style="activeThemeClasses.isCustom ? { color: activeThemeClasses.customColor } : {}"
+            />
           </div>
           <span class="font-bold text-sm text-default tracking-tight">{{ storeInfo.display_name }}</span>
         </div>
 
         <div class="flex items-center gap-3">
-          <UColorModeButton variant="ghost" color="neutral" />
+          <!-- Highly polished custom color mode toggle with smooth spring-physics scale effects -->
+          <button
+            @click="colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'"
+            class="relative size-10 rounded-xl border border-default bg-elevated text-default flex items-center justify-center cursor-pointer active:scale-95 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-all overflow-hidden"
+            aria-label="Toggle Color Mode"
+          >
+            <ClientOnly>
+              <Motion
+                :key="colorMode.value"
+                :initial="{ scale: 0.5, rotate: -45, opacity: 0 }"
+                :animate="{ scale: 1, rotate: 0, opacity: 1 }"
+                :transition="{ type: 'spring', stiffness: 300, damping: 15 }"
+                class="flex items-center justify-center"
+              >
+                <UIcon
+                  v-if="colorMode.value === 'dark'"
+                  name="i-lucide-sun"
+                  class="size-5 text-amber-400"
+                />
+                <UIcon
+                  v-else
+                  name="i-lucide-moon"
+                  class="size-5 text-zinc-700 dark:text-zinc-300"
+                />
+              </Motion>
+            </ClientOnly>
+          </button>
 
           <!-- FLOATING CART BATCH BUTTON (Tactile Active scale spring) -->
           <button
@@ -456,7 +608,23 @@ onMounted(() => {
         <div class="max-w-7xl mx-auto w-full px-4 md:px-8 pb-8 relative z-10 text-left">
           <div class="flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div class="space-y-3">
-              <div class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-widest border border-emerald-500/30">
+              <div
+                class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest border"
+                :class="[
+                  !activeThemeClasses.isCustom
+                    ? `${activeThemeClasses.primaryBg} ${activeThemeClasses.primaryText} ${activeThemeClasses.accentBorder}`
+                    : ''
+                ]"
+                :style="[
+                  activeThemeClasses.isCustom
+                    ? {
+                        backgroundColor: activeThemeClasses.customColor + '1A',
+                        color: activeThemeClasses.customColor,
+                        borderColor: activeThemeClasses.customColor + '33'
+                      }
+                    : {}
+                ]"
+              >
                 <UIcon name="i-lucide-check-circle" class="size-3" />
                 Toko Terverifikasi
               </div>
@@ -514,7 +682,8 @@ onMounted(() => {
               <button
                 type="button"
                 class="px-4 py-2 text-xs font-bold text-white rounded-xl cursor-pointer active:scale-95 transition-transform self-stretch md:self-end text-center flex items-center justify-center gap-1.5"
-                :class="[activeThemeClasses.buttonBg]"
+                :class="[!activeThemeClasses.isCustom ? activeThemeClasses.buttonBg : '']"
+                :style="activeThemeClasses.isCustom ? { backgroundColor: activeThemeClasses.customColor } : {}"
                 @click="addToCart(sfp)"
               >
                 <UIcon name="i-lucide-plus" class="size-4" />
@@ -550,7 +719,22 @@ onMounted(() => {
           <div v-if="categories.length > 0" class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
             <button
               class="px-4 py-1.5 text-xs font-semibold rounded-full border transition-all cursor-pointer shrink-0 active:scale-95"
-              :class="[!selectedCategoryId ? 'bg-default text-inverted border-transparent shadow-sm' : 'bg-elevated border-default text-toned hover:text-default']"
+              :class="[
+                !selectedCategoryId
+                  ? (!activeThemeClasses.isCustom
+                      ? `${activeThemeClasses.primaryBg} ${activeThemeClasses.primaryText} ${activeThemeClasses.accentBorder} font-bold`
+                      : 'font-bold')
+                  : 'bg-elevated border-default text-toned hover:text-default'
+              ]"
+              :style="[
+                !selectedCategoryId && activeThemeClasses.isCustom
+                  ? {
+                      backgroundColor: activeThemeClasses.customColor + '14',
+                      color: activeThemeClasses.customColor,
+                      borderColor: activeThemeClasses.customColor + '33'
+                    }
+                  : {}
+              ]"
               @click="selectedCategoryId = ''"
             >
               Semua
@@ -560,7 +744,22 @@ onMounted(() => {
               v-for="cat in categories"
               :key="cat.id"
               class="px-4 py-1.5 text-xs font-semibold rounded-full border transition-all cursor-pointer shrink-0 active:scale-95"
-              :class="[selectedCategoryId === cat.id ? 'bg-default text-inverted border-transparent shadow-sm' : 'bg-elevated border-default text-toned hover:text-default']"
+              :class="[
+                selectedCategoryId === cat.id
+                  ? (!activeThemeClasses.isCustom
+                      ? `${activeThemeClasses.primaryBg} ${activeThemeClasses.primaryText} ${activeThemeClasses.accentBorder} font-bold`
+                      : 'font-bold')
+                  : 'bg-elevated border-default text-toned hover:text-default'
+              ]"
+              :style="[
+                selectedCategoryId === cat.id && activeThemeClasses.isCustom
+                  ? {
+                      backgroundColor: activeThemeClasses.customColor + '14',
+                      color: activeThemeClasses.customColor,
+                      borderColor: activeThemeClasses.customColor + '33'
+                    }
+                  : {}
+              ]"
               @click="selectedCategoryId = cat.id"
             >
               {{ cat.name }}
@@ -612,7 +811,8 @@ onMounted(() => {
                 <button
                   type="button"
                   class="p-2 text-xs font-bold text-white rounded-xl cursor-pointer active:scale-90 transition-transform flex items-center justify-center shrink-0"
-                  :class="[activeThemeClasses.buttonBg]"
+                  :class="[!activeThemeClasses.isCustom ? activeThemeClasses.buttonBg : '']"
+                  :style="activeThemeClasses.isCustom ? { backgroundColor: activeThemeClasses.customColor } : {}"
                   @click="addToCart(sfp)"
                 >
                   <UIcon name="i-lucide-plus" class="size-4" />
@@ -720,7 +920,9 @@ onMounted(() => {
                         v-model="customerName"
                         type="text"
                         placeholder="Contoh: Budi Santoso"
-                        class="w-full px-3 py-2 rounded-xl border border-default bg-muted/10 text-xs text-default focus:ring-1 focus:ring-emerald-500/20 outline-none"
+                        class="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 text-xs text-default placeholder-zinc-400 dark:placeholder-zinc-500 focus:ring-1 outline-none transition-all"
+                        :class="[!activeThemeClasses.isCustom ? activeThemeClasses.ringColor : 'focus:ring-[var(--accent-ring)]']"
+                        :style="activeThemeClasses.isCustom ? { '--accent-ring': activeThemeClasses.customColor + '4D' } : {}"
                       />
                     </div>
 
@@ -730,7 +932,9 @@ onMounted(() => {
                         v-model="customerPhone"
                         type="text"
                         placeholder="Contoh: 08123456789"
-                        class="w-full px-3 py-2 rounded-xl border border-default bg-muted/10 text-xs text-default focus:ring-1 focus:ring-emerald-500/20 outline-none"
+                        class="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 text-xs text-default placeholder-zinc-400 dark:placeholder-zinc-500 focus:ring-1 outline-none transition-all"
+                        :class="[!activeThemeClasses.isCustom ? activeThemeClasses.ringColor : 'focus:ring-[var(--accent-ring)]']"
+                        :style="activeThemeClasses.isCustom ? { '--accent-ring': activeThemeClasses.customColor + '4D' } : {}"
                       />
                     </div>
 
@@ -740,7 +944,9 @@ onMounted(() => {
                         v-model="customerNotes"
                         rows="2"
                         placeholder="Tulis alamat kirim atau catatan..."
-                        class="w-full px-3 py-2 rounded-xl border border-default bg-muted/10 text-xs text-default focus:ring-1 focus:ring-emerald-500/20 outline-none resize-none"
+                        class="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 text-xs text-default placeholder-zinc-400 dark:placeholder-zinc-500 focus:ring-1 outline-none resize-none transition-all"
+                        :class="[!activeThemeClasses.isCustom ? activeThemeClasses.ringColor : 'focus:ring-[var(--accent-ring)]']"
+                        :style="activeThemeClasses.isCustom ? { '--accent-ring': activeThemeClasses.customColor + '4D' } : {}"
                       ></textarea>
                     </div>
                   </div>
@@ -759,7 +965,13 @@ onMounted(() => {
                 </div>
                 <div class="flex items-center justify-between text-xs text-toned">
                   <span>Biaya Pengiriman</span>
-                  <span class="font-mono font-medium text-emerald-500">Gratis (COD)</span>
+                  <span
+                    class="font-mono font-medium"
+                    :class="[!activeThemeClasses.isCustom ? activeThemeClasses.textColor : '']"
+                    :style="activeThemeClasses.isCustom ? { color: activeThemeClasses.customColor } : {}"
+                  >
+                    Gratis (COD)
+                  </span>
                 </div>
                 <div class="flex items-center justify-between text-sm font-extrabold text-default border-t border-default/40 pt-2">
                   <span>Total Pembayaran</span>
@@ -770,7 +982,8 @@ onMounted(() => {
               <button
                 type="button"
                 class="w-full py-3 rounded-2xl text-xs font-bold text-white transition-all cursor-pointer active:scale-[0.98] flex items-center justify-center gap-2"
-                :class="[cart.length === 0 || !customerName || !customerPhone ? 'bg-zinc-300 dark:bg-zinc-800 text-zinc-500 pointer-events-none' : activeThemeClasses.buttonBg]"
+                :class="[cart.length === 0 || !customerName || !customerPhone ? 'bg-zinc-300 dark:bg-zinc-800 text-zinc-500 pointer-events-none' : (!activeThemeClasses.isCustom ? activeThemeClasses.buttonBg : '')]"
+                :style="activeThemeClasses.isCustom && cart.length > 0 && customerName && customerPhone ? { backgroundColor: activeThemeClasses.customColor } : {}"
                 :disabled="cart.length === 0 || !customerName || !customerPhone"
                 @click="handleCheckout"
               >
@@ -797,7 +1010,11 @@ onMounted(() => {
         <div v-if="orderSuccess" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-6">
           <div class="max-w-md w-full bg-elevated border border-default p-8 rounded-[2rem] shadow-2xl text-center space-y-6 relative">
             
-            <div class="size-16 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center mx-auto text-emerald-500">
+            <div
+              class="size-16 rounded-full flex items-center justify-center mx-auto"
+              :class="[!activeThemeClasses.isCustom ? `${activeThemeClasses.primaryBg} ${activeThemeClasses.textColor}` : '']"
+              :style="activeThemeClasses.isCustom ? { backgroundColor: activeThemeClasses.customColor + '1F', color: activeThemeClasses.customColor } : {}"
+            >
               <UIcon name="i-lucide-badge-check" class="size-10" />
             </div>
 

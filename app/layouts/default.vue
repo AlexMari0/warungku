@@ -63,6 +63,7 @@ const activeModule = computed(() => {
   if (route.path.startsWith('/pos')) return 'pos'
   if (route.path.startsWith('/reports')) return 'reports'
   if (route.path.startsWith('/settings')) return 'settings'
+  if (route.path.startsWith('/ai')) return 'ai'
   return 'dashboard'
 })
 
@@ -95,7 +96,7 @@ const reportsMenuItems = [
 </script>
 
 <template>
-  <div class="min-h-dvh flex bg-muted/10 text-default overflow-hidden font-sans">
+  <div class="h-dvh flex bg-muted/10 text-default overflow-hidden font-sans">
     <!-- Unified Collapsible Sidebar -->
     <aside
       :class="[isSidebarExpanded ? 'w-64' : 'w-[84px]']"
@@ -106,8 +107,8 @@ const reportsMenuItems = [
         :icon="isSidebarExpanded ? 'i-lucide-chevron-left' : 'i-lucide-chevron-right'"
         color="neutral"
         variant="soft"
-        size="xs"
-        class="absolute -right-3 top-7 rounded-full shadow-sm border border-default z-30 transition-transform hover:scale-110 bg-elevated"
+        size="sm"
+        class="absolute -right-4 top-7 rounded-full shadow-md border border-default z-30 transition-all hover:scale-110 active:scale-95 bg-elevated hover:bg-muted dark:hover:bg-zinc-800 text-default hover:text-primary"
         @click="isSidebarExpanded = !isSidebarExpanded"
       />
 
@@ -145,7 +146,7 @@ const reportsMenuItems = [
             <transition name="fade">
               <p
                 v-if="isSidebarExpanded"
-                class="text-[10px] font-bold text-muted uppercase tracking-widest px-3 mb-1 whitespace-nowrap"
+                class="text-[10px] font-extrabold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest px-3 mb-1 whitespace-nowrap"
               >
                 Utama
               </p>
@@ -157,6 +158,13 @@ const reportsMenuItems = [
               :active="route.path === '/'"
               :collapsed="!isSidebarExpanded"
             />
+            <SidebarItem
+              to="/ai"
+              icon="i-lucide-sparkles"
+              label="Asisten AI"
+              :active="route.path.startsWith('/ai')"
+              :collapsed="!isSidebarExpanded"
+            />
           </div>
 
           <!-- GROUP: INVENTORY -->
@@ -164,7 +172,7 @@ const reportsMenuItems = [
             <transition name="fade">
               <p
                 v-if="isSidebarExpanded"
-                class="text-[10px] font-bold text-muted uppercase tracking-widest px-3 mb-1 whitespace-nowrap"
+                class="text-[10px] font-extrabold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest px-3 mb-1 whitespace-nowrap"
               >
                 Produk
               </p>
@@ -190,7 +198,7 @@ const reportsMenuItems = [
             <transition name="fade">
               <p
                 v-if="isSidebarExpanded"
-                class="text-[10px] font-bold text-muted uppercase tracking-widest px-3 mb-1 whitespace-nowrap"
+                class="text-[10px] font-extrabold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest px-3 mb-1 whitespace-nowrap"
               >
                 Transaksi
               </p>
@@ -234,7 +242,7 @@ const reportsMenuItems = [
             <transition name="fade">
               <p
                 v-if="isSidebarExpanded"
-                class="text-[10px] font-bold text-muted uppercase tracking-widest px-3 mb-1 whitespace-nowrap"
+                class="text-[10px] font-extrabold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest px-3 mb-1 whitespace-nowrap"
               >
                 Sistem
               </p>
@@ -295,12 +303,16 @@ const reportsMenuItems = [
           class="flex items-center gap-3"
           :class="!isSidebarExpanded ? 'justify-center' : ''"
         >
-          <UAvatar
-            src="https://i.pravatar.cc/150?u=warungkuadmin2026"
-            alt="Profile"
-            size="sm"
-            class="shrink-0 ring-2 ring-primary/20"
-          />
+          <div class="relative shrink-0 select-none">
+            <UAvatar
+              src="https://i.pravatar.cc/150?u=warungkuadmin2026"
+              alt="Profile"
+              size="sm"
+              class="ring-2 ring-primary/20"
+            />
+            <!-- Pulsing Connection Status Badge -->
+            <span class="absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-zinc-900 animate-pulse" />
+          </div>
           <transition
             enter-active-class="transition-[width,opacity] duration-300 overflow-hidden"
             leave-active-class="transition-[width,opacity] duration-300 overflow-hidden"
@@ -314,7 +326,13 @@ const reportsMenuItems = [
               class="flex flex-col overflow-hidden whitespace-nowrap"
             >
               <span class="text-sm font-bold text-default truncate">{{ friendlyName }}</span>
-              <span class="text-[10px] text-muted font-medium truncate uppercase tracking-wider">Admin Manager</span>
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] text-muted font-medium truncate uppercase tracking-wider">Admin Manager</span>
+                <span class="text-[9px] text-emerald-500 font-semibold tracking-wider flex items-center gap-0.5">
+                  <span class="w-1 h-1 rounded-full bg-emerald-500 shrink-0" />
+                  Online
+                </span>
+              </div>
             </div>
           </transition>
         </div>

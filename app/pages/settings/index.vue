@@ -5,7 +5,7 @@ const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 const toast = useToast()
 
-const activeTab = ref<'storefront' | 'profile'>('storefront')
+const activeTab = ref<'storefront' | 'profile' | 'developer'>('storefront')
 const loading = ref(false)
 const saving = ref(false)
 
@@ -36,6 +36,111 @@ const livePreviewUrl = computed(() => {
   const slugValue = storefront.value.slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '')
   return `/store/${slugValue || 'demo-store'}`
 })
+
+// Real-time Slug validation states
+const slugStatus = ref<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle')
+const slugErrorMessage = ref('')
+let slugCheckTimeout: any = null
+
+function validateSlug(slugVal: string) {
+  const clean = slugVal.trim().toLowerCase()
+  if (!clean) {
+    slugStatus.value = 'invalid'
+    slugErrorMessage.value = 'Slug tidak boleh kosong'
+    return false
+  }
+  if (clean.length < 3) {
+    slugStatus.value = 'invalid'
+    slugErrorMessage.value = 'Slug minimal 3 karakter'
+    return false
+  }
+  if (!/^[a-z0-9-_]+$/.test(clean)) {
+    slugStatus.value = 'invalid'
+    slugErrorMessage.value = 'Hanya boleh berisi huruf kecil, angka, strip (-), dan garis bawah (_)'
+    return false
+  }
+  return true
+}
+
+// Watch slug to trigger real-time validation
+watch(() => storefront.value.slug, (newSlug) => {
+  if (slugCheckTimeout) {
+    clearTimeout(slugCheckTimeout)
+  }
+  
+  if (!newSlug) {
+    slugStatus.value = 'idle'
+    slugErrorMessage.value = ''
+    return
+  }
+
+  const isValid = validateSlug(newSlug)
+  if (!isValid) return
+
+  slugStatus.value = 'checking'
+  
+  slugCheckTimeout = setTimeout(async () => {
+    try {
+      const checkSlug = newSlug.trim().toLowerCase()
+      
+      if (isDemo.value) {
+        // Simulate checking in Demo Mode
+        const takenSlugs = ['budi', 'toko-taken', 'warung-taken']
+        if (takenSlugs.includes(checkSlug)) {
+          slugStatus.value = 'taken'
+          slugErrorMessage.value = `Alamat /store/${checkSlug} sudah digunakan oleh warung lain.`
+        } else {
+          slugStatus.value = 'available'
+          slugErrorMessage.value = ''
+        }
+      } else {
+        if (!user.value) return
+        
+        // Query to check if the slug is taken by someone else
+        const { data, error } = await supabase
+          .from('storefronts')
+          .select('id')
+          .eq('slug', checkSlug)
+          .neq('merchant_id', user.value.id)
+          .maybeSingle()
+          
+        if (error) throw error
+        
+        if (data) {
+          slugStatus.value = 'taken'
+          slugErrorMessage.value = `Alamat /store/${checkSlug} sudah digunakan oleh warung lain.`
+        } else {
+          slugStatus.value = 'available'
+          slugErrorMessage.value = ''
+        }
+      }
+    } catch (err: any) {
+      slugStatus.value = 'invalid'
+      slugErrorMessage.value = 'Gagal memeriksa ketersediaan alamat.'
+    }
+  }, 400) // 400ms debounce
+})
+
+onUnmounted(() => {
+  if (slugCheckTimeout) {
+    clearTimeout(slugCheckTimeout)
+  }
+})
+
+// Custom Theme Color picker
+const colorPickerRef = ref<HTMLInputElement | null>(null)
+
+function triggerColorPicker() {
+  if (colorPickerRef.value) {
+    colorPickerRef.value.click()
+  }
+}
+
+function onCustomColorChange(e: Event) {
+  const target = e.target as HTMLInputElement
+  storefront.value.theme_color = target.value
+}
+
 
 // Format currency standard
 const formatRupiah = (val: number) => {
@@ -347,6 +452,324 @@ const themeColorList = [
   { name: 'slate', bgClass: 'bg-slate-500', borderClass: 'border-slate-600', label: 'Zinc Slate' }
 ]
 
+const mockupDarkMode = ref(false)
+
+const seeding = ref(false)
+const clearing = ref(false)
+
+async function seedDemoData() {
+  seeding.value = true
+  try {
+    // 1. Categories
+    const categoriesList = [
+      { id: 'cat-demo-1', name: 'Sembako', color: '#10b981', sort_order: 1 },
+      { id: 'cat-demo-2', name: 'Minuman', color: '#0284c7', sort_order: 2 },
+      { id: 'cat-demo-3', name: 'Makanan Ringan', color: '#f59e0b', sort_order: 3 },
+      { id: 'cat-demo-4', name: 'Rokok', color: '#ef4444', sort_order: 4 }
+    ]
+
+    // 2. Products
+    const productsList = [
+      { id: 'prod-demo-1', category_id: 'cat-demo-1', name: 'Beras Sentra Ramos 5kg', sku: 'SEM-BRS-RAM', buy_price: 68000, sell_price: 75000, stock_qty: 85, min_stock: 5, unit: 'karung', is_active: true, categories: { name: 'Sembako', color: '#10b981' } },
+      { id: 'prod-demo-2', category_id: 'cat-demo-1', name: 'Minyak Goreng Bimoli 2L', sku: 'SEM-MYK-BIM', buy_price: 32000, sell_price: 36500, stock_qty: 100, min_stock: 8, unit: 'pouch', is_active: true, categories: { name: 'Sembako', color: '#10b981' } },
+      { id: 'prod-demo-3', category_id: 'cat-demo-1', name: 'Gula Pasir Gulaku 1kg', sku: 'SEM-GLA-GUL', buy_price: 14500, sell_price: 17000, stock_qty: 110, min_stock: 10, unit: 'pcs', is_active: true, categories: { name: 'Sembako', color: '#10b981' } },
+      { id: 'prod-demo-4', category_id: 'cat-demo-2', name: 'Aqua 600ml', sku: 'MIN-AQA-600', buy_price: 2500, sell_price: 3500, stock_qty: 240, min_stock: 24, unit: 'botol', is_active: true, categories: { name: 'Minuman', color: '#0284c7' } },
+      { id: 'prod-demo-5', category_id: 'cat-demo-2', name: 'Teh Botol Sosro 350ml', sku: 'MIN-TBS-350', buy_price: 3000, sell_price: 4500, stock_qty: 180, min_stock: 12, unit: 'botol', is_active: true, categories: { name: 'Minuman', color: '#0284c7' } },
+      { id: 'prod-demo-6', category_id: 'cat-demo-2', name: 'Kopi Kapal Api Sachet', sku: 'MIN-KAP-SCT', buy_price: 1200, sell_price: 2000, stock_qty: 300, min_stock: 30, unit: 'pcs', is_active: true, categories: { name: 'Minuman', color: '#0284c7' } },
+      { id: 'prod-demo-7', category_id: 'cat-demo-3', name: 'Indomie Goreng Spesial', sku: 'MAK-IND-GOR', buy_price: 2800, sell_price: 3500, stock_qty: 350, min_stock: 40, unit: 'pcs', is_active: true, categories: { name: 'Makanan Ringan', color: '#f59e0b' } },
+      { id: 'prod-demo-8', category_id: 'cat-demo-3', name: 'Roma Kelapa 300g', sku: 'MAK-ROM-KEL', buy_price: 8500, sell_price: 10500, stock_qty: 120, min_stock: 10, unit: 'pcs', is_active: true, categories: { name: 'Makanan Ringan', color: '#f59e0b' } },
+      { id: 'prod-demo-9', category_id: 'cat-demo-3', name: 'Chiki Balls Keju', sku: 'MAK-CHK-BAL', buy_price: 4000, sell_price: 5500, stock_qty: 140, min_stock: 15, unit: 'pcs', is_active: true, categories: { name: 'Makanan Ringan', color: '#f59e0b' } },
+      { id: 'prod-demo-10', category_id: 'cat-demo-4', name: 'Sampoerna Mild 16', sku: 'ROK-SAM-MLD', buy_price: 28000, sell_price: 31000, stock_qty: 90, min_stock: 5, unit: 'pack', is_active: true, categories: { name: 'Rokok', color: '#ef4444' } },
+      { id: 'prod-demo-11', category_id: 'cat-demo-4', name: 'Djarum Super 12', sku: 'ROK-DJR-SPR', buy_price: 21000, sell_price: 23500, stock_qty: 80, min_stock: 5, unit: 'pack', is_active: true, categories: { name: 'Rokok', color: '#ef4444' } },
+      { id: 'prod-demo-12', category_id: 'cat-demo-4', name: 'Gudang Garam Filter 12', sku: 'ROK-GGF-12', buy_price: 22000, sell_price: 24500, stock_qty: 80, min_stock: 5, unit: 'pack', is_active: true, categories: { name: 'Rokok', color: '#ef4444' } }
+    ]
+
+    // 3. Customers
+    const customersList = [
+      { id: 'cust-demo-1', name: 'Budi Santoso', phone: '08123456789', loyalty_points: 15 },
+      { id: 'cust-demo-2', name: 'Siti Aminah', phone: '08139876543', loyalty_points: 42 },
+      { id: 'cust-demo-3', name: 'Joko Widodo', phone: '08111222333', loyalty_points: 110 },
+      { id: 'cust-demo-4', name: 'Dewi Lestari', phone: '08187654321', loyalty_points: 25 },
+      { id: 'cust-demo-5', name: 'Rudi Hermawan', phone: '08571234567', loyalty_points: 8 }
+    ]
+
+    // 4. Storefront setup
+    const storefrontDetails = {
+      id: 'sf-demo-1',
+      slug: 'warung-makmur-jaya',
+      display_name: 'Warung Makmur Jaya',
+      description: 'Menjual sembako, minuman dingin, mie instan, dan kebutuhan sehari-hari Anda dengan harga murah!',
+      banner_url: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=800&auto=format&fit=crop',
+      theme_color: 'emerald',
+      is_published: true
+    }
+
+    // 5. Storefront products catalog link
+    const storefrontProductsList = [
+      { id: 'sfp-demo-1', storefront_id: 'sf-demo-1', product_id: 'prod-demo-1', is_featured: true, sort_order: 1, custom_description: 'Produk fresh berkualitas di Warung Makmur Jaya: Beras Sentra Ramos 5kg.' },
+      { id: 'sfp-demo-2', storefront_id: 'sf-demo-1', product_id: 'prod-demo-2', is_featured: true, sort_order: 2, custom_description: 'Minyak goreng fresh Bimoli 2L.' },
+      { id: 'sfp-demo-3', storefront_id: 'sf-demo-1', product_id: 'prod-demo-3', is_featured: false, sort_order: 3, custom_description: 'Gula pasir Gulaku murni manis.' },
+      { id: 'sfp-demo-4', storefront_id: 'sf-demo-1', product_id: 'prod-demo-4', is_featured: false, sort_order: 4, custom_description: 'Aqua botol segar dingin.' },
+      { id: 'sfp-demo-5', storefront_id: 'sf-demo-1', product_id: 'prod-demo-5', is_featured: false, sort_order: 5, custom_description: 'Teh botol Sosro nikmat segar.' }
+    ]
+
+    // 6. Online Orders
+    const onlineOrdersList = [
+      {
+        id: 'online-mock-1',
+        storefront_id: 'sf-demo-1',
+        customer_name: 'Dewi Lestari',
+        customer_phone: '08187654321',
+        customer_address: 'Jl. Melati No. 5, Jakarta',
+        shipping_method: 'delivery',
+        payment_method: 'cod',
+        items: [
+          { product_id: 'prod-demo-1', quantity: 1, unit_price: 75000, subtotal: 75000 },
+          { product_id: 'prod-demo-4', quantity: 2, unit_price: 3500, subtotal: 7000 }
+        ],
+        total_amount: 82000,
+        notes: 'Kirim sore hari ya',
+        status: 'pending',
+        created_at: new Date(Date.now() - 3600000 * 3).toISOString()
+      },
+      {
+        id: 'online-mock-2',
+        storefront_id: 'sf-demo-1',
+        customer_name: 'Rudi Hermawan',
+        customer_phone: '08571234567',
+        customer_address: 'Jl. Merpati No. 12, Jakarta',
+        shipping_method: 'pickup',
+        payment_method: 'qris',
+        items: [
+          { product_id: 'prod-demo-2', quantity: 1, unit_price: 36500, subtotal: 36500 }
+        ],
+        total_amount: 36500,
+        notes: 'Saya ambil nanti jam 12',
+        status: 'completed',
+        created_at: new Date(Date.now() - 3600000 * 24).toISOString()
+      }
+    ]
+
+    const seededMovements: any[] = []
+    const seededOrders: any[] = []
+
+    // Add initial purchase movements
+    productsList.forEach(p => {
+      seededMovements.push({
+        id: `move-mock-${p.id}-init`,
+        product_id: p.id,
+        supplier_id: 'supplier-demo-1',
+        type: 'purchase',
+        quantity: p.stock_qty,
+        qty_before: 0,
+        qty_after: p.stock_qty,
+        unit_cost: p.buy_price,
+        reference_type: 'adjustment',
+        notes: 'Stok awal ditambahkan via Data Seeder Sistem',
+        created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+      })
+    })
+
+    const productStocks: Record<string, number> = {}
+    productsList.forEach(p => {
+      productStocks[p.id] = p.stock_qty
+    })
+
+    const orderDates: { date: Date; dayStr: string }[] = []
+    const now = new Date()
+
+    // Distribute transactions across last 30 days
+    for (let dayOffset = 30; dayOffset >= 0; dayOffset--) {
+      const numOrders = Math.floor(Math.random() * 3) + 1 // 1 to 3 orders per day
+      for (let oIdx = 0; oIdx < numOrders; oIdx++) {
+        const orderDate = new Date(now.getTime())
+        orderDate.setDate(now.getDate() - dayOffset)
+        
+        const rand = Math.random()
+        let hour = 8
+        if (rand < 0.25) {
+          hour = 11 + Math.floor(Math.random() * 3)
+        } else if (rand < 0.7) {
+          hour = 16 + Math.floor(Math.random() * 5)
+        } else {
+          hour = 8 + Math.floor(Math.random() * 11)
+        }
+        orderDate.setHours(hour, Math.floor(Math.random() * 60), Math.floor(Math.random() * 60), 0)
+        orderDates.push({ date: orderDate, dayStr: orderDate.toISOString().split('T')[0] as string })
+      }
+    }
+
+    orderDates.sort((a, b) => a.date.getTime() - b.date.getTime())
+
+    let orderNumberCounter = 1
+    orderDates.forEach(od => {
+      const transactionDate = od.date
+      const datePrefix = od.dayStr.replace(/-/g, '')
+      const paddedCounter = String(orderNumberCounter++).padStart(4, '0')
+      const orderNumber = `WK-${datePrefix}-${paddedCounter}`
+
+      const isGuest = Math.random() < 0.5
+      const customer = isGuest ? null : customersList[Math.floor(Math.random() * customersList.length)]
+
+      const numItems = Math.floor(Math.random() * 3) + 1
+      const selectedProds: any[] = []
+      const availableProds = [...productsList]
+
+      for (let i = 0; i < numItems; i++) {
+        const pIdx = Math.floor(Math.random() * availableProds.length)
+        selectedProds.push(availableProds.splice(pIdx, 1)[0])
+      }
+
+      let subtotal = 0
+      const itemsPayload: any[] = []
+
+      selectedProds.forEach(prod => {
+        const isSembako = prod.sku.startsWith('SEM')
+        const qty = isSembako ? (Math.random() < 0.8 ? 1 : 2) : (Math.floor(Math.random() * 3) + 1)
+        const itemSubtotal = qty * prod.sell_price
+        subtotal += itemSubtotal
+
+        itemsPayload.push({
+          product_id: prod.id,
+          quantity: qty,
+          unit_price: prod.sell_price,
+          discount: 0,
+          subtotal: itemSubtotal
+        })
+
+        const curStock = productStocks[prod.id] || 50
+        const nextStock = curStock - qty
+        productStocks[prod.id] = nextStock
+
+        seededMovements.push({
+          id: `move-mock-${prod.id}-${orderNumber}`,
+          product_id: prod.id,
+          type: 'sale',
+          quantity: -qty,
+          qty_before: curStock,
+          qty_after: nextStock,
+          unit_cost: null,
+          reference_id: `order-demo-${orderNumber}`,
+          reference_type: 'order',
+          notes: 'Penjualan Kasir POS',
+          created_at: transactionDate.toISOString()
+        })
+      })
+
+      const discountAmount = Math.random() < 0.15 ? (Math.random() < 0.5 ? 1000 : 2000) : 0
+      const totalAmount = Math.max(0, subtotal - discountAmount)
+
+      seededOrders.push({
+        id: `order-demo-${orderNumber}`,
+        merchant_id: 'demo-merchant-id',
+        customer_id: customer ? customer.id : null,
+        order_number: orderNumber,
+        status: 'paid',
+        subtotal: subtotal,
+        discount_amount: discountAmount,
+        total_amount: totalAmount,
+        notes: isGuest ? null : 'Penjualan POS Pelanggan Setia',
+        created_at: transactionDate.toISOString(),
+        items: itemsPayload
+      })
+    })
+
+    // Apply updated stocks
+    productsList.forEach(p => {
+      const stock = productStocks[p.id]
+      if (stock !== undefined) {
+        p.stock_qty = stock
+      }
+    })
+
+    // Sort & slice movements to last 100
+    const finalMovements = seededMovements
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 100)
+
+    // Save everything to localStorage
+    localStorage.setItem('warungku_categories', JSON.stringify(categoriesList))
+    localStorage.setItem('warungku_products', JSON.stringify(productsList))
+    localStorage.setItem('warungku_customers', JSON.stringify(customersList))
+    localStorage.setItem('warungku_storefront', JSON.stringify(storefrontDetails))
+    localStorage.setItem('warungku_storefront_products', JSON.stringify(storefrontProductsList))
+    localStorage.setItem('warungku_online_orders', JSON.stringify(onlineOrdersList))
+    localStorage.setItem('warungku_orders', JSON.stringify(seededOrders))
+    localStorage.setItem('warungku_movements', JSON.stringify(finalMovements))
+
+    // Clear session & messages for AI coach to reset cleanly
+    localStorage.removeItem('warungku_ai_sessions')
+    localStorage.removeItem('warungku_ai_messages')
+
+    toast.add({
+      title: 'Seeding Berhasil',
+      description: 'Dataset Demo Mode berhasil dipopulasikan dengan 60+ pesanan POS!',
+      color: 'success'
+    })
+
+    // Refresh state reactively
+    await fetchData()
+  } catch (err: any) {
+    toast.add({
+      title: 'Seeding Gagal',
+      description: err.message,
+      color: 'error'
+    })
+  } finally {
+    seeding.value = false
+  }
+}
+
+async function clearDemoData() {
+  clearing.value = true
+  try {
+    localStorage.removeItem('warungku_categories')
+    localStorage.removeItem('warungku_products')
+    localStorage.removeItem('warungku_customers')
+    localStorage.removeItem('warungku_storefront')
+    localStorage.removeItem('warungku_storefront_products')
+    localStorage.removeItem('warungku_online_orders')
+    localStorage.removeItem('warungku_orders')
+    localStorage.removeItem('warungku_movements')
+    localStorage.removeItem('warungku_ai_sessions')
+    localStorage.removeItem('warungku_ai_messages')
+
+    toast.add({
+      title: 'Data Dihapus',
+      description: 'Seluruh dataset Demo Mode telah dikosongkan.',
+      color: 'success'
+    })
+
+    // Refresh state reactively
+    await fetchData()
+  } catch (err: any) {
+    toast.add({
+      title: 'Gagal Menghapus Data',
+      description: err.message,
+      color: 'error'
+    })
+  } finally {
+    clearing.value = false
+  }
+}
+
+async function copyCommand() {
+  try {
+    await navigator.clipboard.writeText('node scripts/seed.mjs')
+    toast.add({
+      title: 'Perintah disalin',
+      description: 'Perintah seeder telah disalin ke papan klip.',
+      color: 'success'
+    })
+  } catch (err: any) {
+    toast.add({
+      title: 'Gagal menyalin',
+      description: 'Silakan salin perintah secara manual.',
+      color: 'error'
+    })
+  }
+}
+
 onMounted(() => {
   fetchData()
 })
@@ -370,7 +793,7 @@ onMounted(() => {
       </div>
 
       <!-- Tab Switchers (Tactile spring clicks active:scale-[0.98]) -->
-      <div class="flex gap-1.5 bg-muted/20 p-1.5 rounded-xl border border-default self-start">
+      <div class="flex gap-1.5 bg-muted/20 p-1.5 rounded-xl border border-default self-start flex-wrap">
         <button
           class="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer active:scale-[0.98]"
           :class="[activeTab === 'storefront' ? 'bg-elevated text-default shadow-sm border border-default font-bold' : 'text-toned hover:text-default hover:bg-muted/30']"
@@ -387,6 +810,14 @@ onMounted(() => {
           <UIcon name="i-lucide-user" class="size-4" />
           Profil Merchant
         </button>
+        <button
+          class="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer active:scale-[0.98]"
+          :class="[activeTab === 'developer' ? 'bg-elevated text-default shadow-sm border border-default font-bold' : 'text-toned hover:text-default hover:bg-muted/30']"
+          @click="activeTab = 'developer'"
+        >
+          <UIcon name="i-lucide-database-backup" class="size-4" />
+          Demo Seeder
+        </button>
       </div>
     </div>
 
@@ -401,19 +832,62 @@ onMounted(() => {
       
       <!-- LEFT ASYMMETRIC COLUMN: LIVE PREVIEW PHONE MOCKUP -->
       <div class="lg:col-span-1 space-y-6">
-        <div class="flex items-center gap-2 px-1">
-          <UIcon name="i-lucide-smartphone" class="size-4 text-toned" />
-          <span class="text-xs font-mono font-bold tracking-wider text-muted uppercase">Pratinjau Tampilan Web</span>
+        <div class="flex items-center justify-between px-1">
+          <div class="flex items-center gap-2">
+            <UIcon name="i-lucide-smartphone" class="size-4 text-toned" />
+            <span class="text-xs font-mono font-bold tracking-wider text-muted uppercase">Pratinjau Tampilan Web</span>
+          </div>
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="subtle"
+            icon="i-lucide-external-link"
+            class="cursor-pointer active:scale-95 text-[10px]"
+            :to="livePreviewUrl"
+            target="_blank"
+          >
+            Pratinjau Penuh
+          </UButton>
         </div>
 
-        <div class="relative mx-auto max-w-[340px] rounded-[3rem] ring-12 ring-zinc-950 dark:ring-zinc-900 border-[6px] border-zinc-800 bg-elevated shadow-2xl overflow-hidden aspect-[9/19.5]">
+        <div class="relative mx-auto max-w-[380px] w-full rounded-[3rem] ring-12 ring-zinc-950 dark:ring-zinc-900 border-[6px] border-zinc-800 bg-elevated shadow-2xl overflow-hidden aspect-[9/19.5]">
           <!-- Phone Speaker / Camera Notch -->
           <div class="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-5 bg-zinc-900 rounded-b-2rem z-30 flex items-center justify-center">
             <div class="w-10 h-1 bg-zinc-700 rounded-full"></div>
           </div>
 
           <!-- Mockup Frame Content -->
-          <div class="h-full overflow-y-auto no-scrollbar flex flex-col pt-5">
+          <div
+            class="h-full overflow-y-auto no-scrollbar flex flex-col pt-5 transition-colors duration-300"
+            :class="mockupDarkMode ? 'bg-zinc-950 text-zinc-100' : 'bg-zinc-50 text-zinc-900'"
+          >
+            <!-- Mock Status Bar -->
+            <div
+              class="h-7 px-5 flex items-center justify-between text-[10px] font-mono shrink-0 select-none z-20 border-b transition-colors"
+              :class="mockupDarkMode ? 'bg-zinc-950 text-zinc-400 border-zinc-900' : 'bg-white text-zinc-500 border-zinc-100'"
+            >
+              <span class="font-semibold">09:41</span>
+              <div class="flex items-center gap-2">
+                <!-- Theme Toggle Button -->
+                <button
+                  type="button"
+                  class="p-1 rounded-md cursor-pointer active:scale-95 transition-all flex items-center justify-center shrink-0"
+                  :class="mockupDarkMode ? 'hover:bg-zinc-900' : 'hover:bg-zinc-100'"
+                  @click="mockupDarkMode = !mockupDarkMode"
+                  title="Toggle Mode Mockup"
+                >
+                  <UIcon
+                    :name="mockupDarkMode ? 'i-lucide-sun' : 'i-lucide-moon'"
+                    class="size-3.5"
+                    :class="mockupDarkMode ? 'text-amber-400' : 'text-zinc-500'"
+                  />
+                </button>
+                <UIcon name="i-lucide-signal" class="size-3 text-toned" />
+                <UIcon name="i-lucide-wifi" class="size-3 text-toned" />
+                <UIcon name="i-lucide-battery" class="size-3.5 text-toned" />
+              </div>
+            </div>
+
             <!-- Mock Banner -->
             <div class="h-28 w-full bg-muted/30 relative overflow-hidden shrink-0">
               <img
@@ -422,7 +896,11 @@ onMounted(() => {
                 alt="Banner mockup"
                 class="w-full h-full object-cover opacity-80"
               />
-              <div v-else class="w-full h-full flex items-center justify-center text-xs text-toned bg-muted/20">
+              <div
+                v-else
+                class="w-full h-full flex items-center justify-center text-xs transition-colors"
+                :class="mockupDarkMode ? 'bg-zinc-900/50 text-zinc-500' : 'bg-zinc-200/50 text-zinc-400'"
+              >
                 <UIcon name="i-lucide-image" class="size-6 text-muted" />
               </div>
               <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
@@ -437,30 +915,58 @@ onMounted(() => {
             </div>
 
             <!-- Mock Header Info -->
-            <div class="px-4 -mt-6 z-10 relative space-y-1">
-              <div class="size-12 rounded-xl bg-elevated border border-default flex items-center justify-center shadow-md">
-                <UIcon name="i-lucide-store" class="size-6 text-default" />
+            <div class="px-4 -mt-6 z-10 relative space-y-1 text-left">
+              <div
+                class="size-12 rounded-xl border flex items-center justify-center shadow-md transition-all"
+                :class="mockupDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100 shadow-zinc-950/50' : 'bg-white border-zinc-200 text-zinc-900 shadow-md'"
+              >
+                <UIcon name="i-lucide-store" class="size-6" />
               </div>
-              <h4 class="text-sm font-bold text-default truncate mt-1">
+              <h4
+                class="text-sm font-bold truncate mt-1 transition-colors"
+                :class="mockupDarkMode ? 'text-zinc-100' : 'text-zinc-900'"
+              >
                 {{ storefront.display_name || 'Nama Toko Anda' }}
               </h4>
-              <p class="text-[10px] text-toned font-light line-clamp-2 leading-relaxed">
+              <p
+                class="text-[10px] font-light line-clamp-2 leading-relaxed transition-colors"
+                :class="mockupDarkMode ? 'text-zinc-400' : 'text-zinc-500'"
+              >
                 {{ storefront.description || 'Deskripsi atau tagline toko online Anda akan ditampilkan di sini...' }}
               </p>
               
               <!-- Color theme accent label -->
               <div class="pt-1.5 flex items-center gap-1.5">
-                <span class="text-[9px] uppercase tracking-wider text-muted font-bold">Aksen Tema:</span>
-                <span class="size-2 rounded-full" :class="[themeColorList.find(t => t.name === storefront.theme_color)?.bgClass || 'bg-emerald-500']"></span>
-                <span class="text-[9px] font-mono text-default capitalize">{{ storefront.theme_color }}</span>
+                <span
+                  class="text-[9px] uppercase tracking-wider font-bold transition-colors"
+                  :class="mockupDarkMode ? 'text-zinc-500' : 'text-zinc-400'"
+                >Aksen Tema:</span>
+                <span
+                  class="size-2 rounded-full border border-default/20"
+                  :class="[!storefront.theme_color.startsWith('#') ? (themeColorList.find(t => t.name === storefront.theme_color)?.bgClass || 'bg-emerald-500') : '']"
+                  :style="storefront.theme_color.startsWith('#') ? { backgroundColor: storefront.theme_color } : {}"
+                ></span>
+                <span
+                  class="text-[9px] font-mono uppercase transition-colors"
+                  :class="mockupDarkMode ? 'text-zinc-300 font-medium' : 'text-zinc-700 font-semibold'"
+                >{{ storefront.theme_color }}</span>
               </div>
             </div>
 
             <!-- Mock Products Grid Preview -->
             <div class="flex-1 px-4 py-6 space-y-4">
-              <div class="flex items-center justify-between border-b border-default pb-1">
-                <span class="text-[10px] font-extrabold text-default tracking-wide">Katalog Toko</span>
-                <span class="text-[8px] text-muted font-mono uppercase">Preview</span>
+              <div
+                class="flex items-center justify-between border-b pb-1 transition-colors"
+                :class="mockupDarkMode ? 'border-zinc-900' : 'border-zinc-200'"
+              >
+                <span
+                  class="text-[10px] font-extrabold tracking-wide transition-colors"
+                  :class="mockupDarkMode ? 'text-zinc-200' : 'text-zinc-800'"
+                >Katalog Toko</span>
+                <span
+                  class="text-[8px] font-mono uppercase transition-colors"
+                  :class="mockupDarkMode ? 'text-zinc-500' : 'text-zinc-400'"
+                >Preview</span>
               </div>
 
               <!-- Empty state inside preview -->
@@ -474,9 +980,13 @@ onMounted(() => {
                 <div
                   v-for="p in products.filter(item => storefrontProductsMap[item.id]?.is_linked).slice(0, 4)"
                   :key="p.id"
-                  class="rounded-xl border border-default p-2 bg-elevated/50 flex flex-col justify-between space-y-2"
+                  class="rounded-xl border p-2 flex flex-col justify-between space-y-2 transition-all"
+                  :class="mockupDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-xs'"
                 >
-                  <div class="w-full aspect-square bg-muted/30 rounded-lg overflow-hidden relative shrink-0">
+                  <div
+                    class="w-full aspect-square rounded-lg overflow-hidden relative shrink-0 transition-colors"
+                    :class="mockupDarkMode ? 'bg-zinc-950' : 'bg-zinc-100'"
+                  >
                     <img v-if="p.image_url" :src="p.image_url" alt="" class="w-full h-full object-cover" />
                     <div v-else class="w-full h-full flex items-center justify-center"><UIcon name="i-lucide-package" class="size-4 text-muted" /></div>
                     
@@ -485,10 +995,20 @@ onMounted(() => {
                     </span>
                   </div>
                   <div class="space-y-0.5 text-left">
-                    <h5 class="text-[10px] font-extrabold text-default truncate">{{ p.name }}</h5>
-                    <p class="text-[9px] font-mono font-bold text-toned">{{ formatRupiah(p.sell_price) }}</p>
+                    <h5
+                      class="text-[10px] font-extrabold truncate transition-colors"
+                      :class="mockupDarkMode ? 'text-zinc-200' : 'text-zinc-800'"
+                    >{{ p.name }}</h5>
+                    <p
+                      class="text-[9px] font-mono font-bold transition-colors"
+                      :class="mockupDarkMode ? 'text-zinc-400' : 'text-zinc-600'"
+                    >{{ formatRupiah(p.sell_price) }}</p>
                   </div>
-                  <button class="w-full py-1 rounded-lg text-[8px] font-bold text-white transition-all pointer-events-none" :class="[themeColorList.find(t => t.name === storefront.theme_color)?.bgClass || 'bg-emerald-500']">
+                  <button
+                    class="w-full py-1 rounded-lg text-[8px] font-bold text-white transition-all pointer-events-none"
+                    :class="[!storefront.theme_color.startsWith('#') ? (themeColorList.find(t => t.name === storefront.theme_color)?.bgClass || 'bg-emerald-500') : '']"
+                    :style="storefront.theme_color.startsWith('#') ? { backgroundColor: storefront.theme_color } : {}"
+                  >
                     Beli
                   </button>
                 </div>
@@ -496,8 +1016,14 @@ onMounted(() => {
             </div>
 
             <!-- Footer Brand -->
-            <div class="py-4 border-t border-default text-center">
-              <span class="text-[8px] text-muted font-mono uppercase tracking-wider">WarungKu Digital Hub</span>
+            <div
+              class="py-4 border-t text-center transition-colors"
+              :class="mockupDarkMode ? 'border-zinc-900' : 'border-zinc-200'"
+            >
+              <span
+                class="text-[8px] font-mono uppercase tracking-wider transition-colors"
+                :class="mockupDarkMode ? 'text-zinc-600' : 'text-zinc-400'"
+              >WarungKu Digital Hub</span>
             </div>
           </div>
         </div>
@@ -562,6 +1088,27 @@ onMounted(() => {
                     Buka Toko
                   </UButton>
                 </div>
+                
+                <!-- Real-time Validation Feedback -->
+                <div class="transition-all duration-300 ease-out pt-0.5">
+                  <div v-if="slugStatus === 'checking'" class="flex items-center gap-1.5 text-[11px] text-muted font-mono">
+                    <UIcon name="i-lucide-loader" class="size-3.5 animate-spin text-primary shrink-0" />
+                    Memeriksa ketersediaan alamat...
+                  </div>
+                  <div v-else-if="slugStatus === 'available'" class="flex items-center gap-1.5 text-[11px] text-emerald-500 font-medium">
+                    <UIcon name="i-lucide-check-circle" class="size-3.5 text-emerald-500 shrink-0" />
+                    Alamat tersedia! Pembeli dapat mengakses toko Anda melalui link ini.
+                  </div>
+                  <div v-else-if="slugStatus === 'taken'" class="flex items-center gap-1.5 text-[11px] text-rose-500 font-medium">
+                    <UIcon name="i-lucide-x-circle" class="size-3.5 text-rose-500 shrink-0" />
+                    {{ slugErrorMessage }}
+                  </div>
+                  <div v-else-if="slugStatus === 'invalid'" class="flex items-center gap-1.5 text-[11px] text-amber-500 font-medium">
+                    <UIcon name="i-lucide-alert-circle" class="size-3.5 text-amber-500 shrink-0" />
+                    {{ slugErrorMessage }}
+                  </div>
+                </div>
+
                 <p class="text-[10px] text-muted italic">
                   *Gunakan huruf kecil, angka, dan tanda strip. Link ini adalah alamat web publik untuk para pembeli Anda.
                 </p>
@@ -604,6 +1151,38 @@ onMounted(() => {
                         class="size-4 text-white"
                       />
                     </button>
+                  </UTooltip>
+
+                  <!-- Custom Color Picker Circle -->
+                  <UTooltip
+                    text="Warna Kustom"
+                    side="top"
+                    :ui="{ content: 'max-w-fit' }"
+                  >
+                    <div class="relative shrink-0 size-8">
+                      <button
+                        type="button"
+                        class="size-8 rounded-full border-2 cursor-pointer transition-all hover:scale-110 active:scale-95 flex items-center justify-center shrink-0 bg-gradient-to-tr from-rose-500 via-emerald-500 to-sky-500"
+                        :class="[
+                          storefront.theme_color.startsWith('#') ? 'border-default ring-2 ring-primary scale-110' : 'border-transparent opacity-80 hover:opacity-100'
+                        ]"
+                        :style="storefront.theme_color.startsWith('#') ? { background: storefront.theme_color } : {}"
+                        @click="triggerColorPicker"
+                      >
+                        <UIcon
+                          name="i-lucide-palette"
+                          class="size-4 text-white"
+                        />
+                      </button>
+                      <!-- Hidden input type="color" -->
+                      <input
+                        ref="colorPickerRef"
+                        type="color"
+                        class="absolute inset-0 opacity-0 cursor-pointer pointer-events-none"
+                        :value="storefront.theme_color.startsWith('#') ? storefront.theme_color : '#10B981'"
+                        @input="onCustomColorChange"
+                      />
+                    </div>
                   </UTooltip>
                 </div>
               </div>
@@ -735,32 +1314,52 @@ onMounted(() => {
 
                     <!-- Stock counts status -->
                     <td class="py-4 px-3 text-center">
-                      <span
-                        class="text-xs font-mono font-bold px-2 py-0.5 rounded-full"
-                        :class="[p.stock_qty <= p.min_stock ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200' : 'bg-muted text-toned']"
-                      >
-                        {{ p.stock_qty }} {{ p.unit }}
-                      </span>
+                      <div class="flex flex-col items-center justify-center gap-0.5">
+                        <span
+                          class="text-xs font-mono font-bold px-2 py-0.5 rounded-full shrink-0"
+                          :class="[p.stock_qty <= p.min_stock ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200' : 'bg-muted text-toned']"
+                        >
+                          {{ p.stock_qty }} {{ p.unit }}
+                        </span>
+                        
+                        <UTooltip
+                          v-if="p.stock_qty <= p.min_stock"
+                          text="Produk dengan stok menipis tetap dipajang di toko online Anda, tetapi disarankan segera restock agar pembeli dapat memesan tanpa kendala."
+                          side="top"
+                          :ui="{ content: 'max-w-xs whitespace-normal text-center' }"
+                        >
+                          <span class="inline-flex items-center gap-0.5 text-[8px] text-rose-500 font-medium cursor-help underline decoration-dotted decoration-rose-400">
+                            <UIcon name="i-lucide-alert-triangle" class="size-2.5 shrink-0" />
+                            Segera Restock
+                          </span>
+                        </UTooltip>
+                      </div>
                     </td>
 
                     <!-- Featured status -->
                     <td class="py-4 px-3 text-center">
-                      <button
+                      <UTooltip
                         v-if="storefrontProductsMap[p.id]?.is_linked"
-                        type="button"
-                        class="p-1 px-2 text-[9px] font-bold rounded-lg border transition-all cursor-pointer active:scale-90"
-                        :class="[
-                          storefrontProductsMap[p.id]?.is_featured
-                            ? 'bg-amber-100 border-amber-300 text-amber-800 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-900'
-                            : 'bg-elevated border-default text-muted hover:text-default'
-                        ]"
-                        @click="toggleFeatured(p.id)"
+                        text="Jadikan Produk Unggulan: Produk ini akan disematkan di bagian paling atas toko online Anda agar lebih menonjol."
+                        side="top"
+                        :ui="{ content: 'max-w-xs whitespace-normal text-center' }"
                       >
-                        <UIcon
-                          :name="storefrontProductsMap[p.id]?.is_featured ? 'i-lucide-star' : 'i-lucide-star-off'"
-                          class="size-3.5"
-                        />
-                      </button>
+                        <button
+                          type="button"
+                          class="p-1 px-2 text-[9px] font-bold rounded-lg border transition-all cursor-pointer active:scale-90"
+                          :class="[
+                            storefrontProductsMap[p.id]?.is_featured
+                              ? 'bg-amber-100 border-amber-300 text-amber-800 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-900'
+                              : 'bg-elevated border-default text-muted hover:text-default'
+                          ]"
+                          @click="toggleFeatured(p.id)"
+                        >
+                          <UIcon
+                            :name="storefrontProductsMap[p.id]?.is_featured ? 'i-lucide-star' : 'i-lucide-star-off'"
+                            class="size-3.5"
+                          />
+                        </button>
+                      </UTooltip>
                       <span v-else class="text-[10px] text-muted font-light">-</span>
                     </td>
 
@@ -863,6 +1462,131 @@ onMounted(() => {
             <p class="text-[10px] text-muted italic">
               *Informasi identitas Anda di atas diproteksi dengan supabase Postgres Row-Level Security.
             </p>
+          </div>
+        </div>
+      </Motion>
+    </div>
+
+    <!-- TAB CONTAINER 3: DEVELOPER DEMO SEEDER -->
+    <div v-else-if="activeTab === 'developer'" class="max-w-2xl mx-auto">
+      <Motion
+        :initial="{ opacity: 0, y: 15 }"
+        :animate="{ opacity: 1, y: 0 }"
+        :transition="{ duration: 0.5, type: 'spring', bounce: 0.1 }"
+      >
+        <div class="bg-elevated border border-default p-8 rounded-[2rem] shadow-sm space-y-6 text-left">
+          <div class="flex items-center gap-4 pb-6 border-b border-default">
+            <div class="size-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+              <UIcon name="i-lucide-database-zap" class="size-6 text-primary" />
+            </div>
+            <div class="space-y-1">
+              <h3 class="text-xl font-bold text-default">
+                Dataset Demo &amp; Developer Seeder
+              </h3>
+              <p class="text-xs text-muted font-mono tracking-wider uppercase">
+                Pengelolaan Mock Data &amp; E2E Testing Seeder
+              </p>
+            </div>
+          </div>
+
+          <!-- Section: Local Storage Seeder -->
+          <div class="space-y-4">
+            <div class="space-y-1">
+              <h4 class="text-sm font-bold text-default">
+                1. Demo Mode Seeder (Browser Storage)
+              </h4>
+              <p class="text-xs text-toned leading-relaxed font-light">
+                Populasikan browser lokal Anda dengan dataset lengkap Indonesian Warung. Cocok untuk demo offline, walkthrough visual, dan memvisualisasikan grafik laporan bisnis 30 hari secara instan.
+              </p>
+            </div>
+
+            <!-- Stats grid preview -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 py-3">
+              <div class="bg-muted/10 border border-default/50 rounded-xl p-3 text-center">
+                <span class="block text-2xl font-extrabold text-default font-mono">4</span>
+                <span class="text-[9px] uppercase tracking-wider text-muted font-bold">Kategori</span>
+              </div>
+              <div class="bg-muted/10 border border-default/50 rounded-xl p-3 text-center">
+                <span class="block text-2xl font-extrabold text-default font-mono">12</span>
+                <span class="text-[9px] uppercase tracking-wider text-muted font-bold">Produk Catalog</span>
+              </div>
+              <div class="bg-muted/10 border border-default/50 rounded-xl p-3 text-center">
+                <span class="block text-2xl font-extrabold text-default font-mono">5</span>
+                <span class="text-[9px] uppercase tracking-wider text-muted font-bold">Pelanggan</span>
+              </div>
+              <div class="bg-muted/10 border border-default/50 rounded-xl p-3 text-center">
+                <span class="block text-2xl font-extrabold text-default font-mono">60+</span>
+                <span class="text-[9px] uppercase tracking-wider text-muted font-bold">POS Transaksi</span>
+              </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3 pt-2">
+              <UButton
+                color="success"
+                variant="solid"
+                icon="i-lucide-database-backup"
+                class="flex-1 justify-center py-2.5 rounded-xl font-bold cursor-pointer active:scale-[0.98]"
+                :loading="seeding"
+                @click="seedDemoData"
+              >
+                Populasikan Data Demo
+              </UButton>
+              
+              <UButton
+                color="neutral"
+                variant="soft"
+                icon="i-lucide-trash-2"
+                class="justify-center py-2.5 rounded-xl font-bold cursor-pointer active:scale-[0.98] px-5"
+                :loading="clearing"
+                @click="clearDemoData"
+              >
+                Reset Data
+              </UButton>
+            </div>
+          </div>
+
+          <div class="border-t border-default/50 my-6"></div>
+
+          <!-- Section: Live Database Seeder -->
+          <div class="space-y-4">
+            <div class="space-y-1">
+              <h4 class="text-sm font-bold text-default">
+                2. Live Database Seeder (Supabase SQL)
+              </h4>
+              <p class="text-xs text-toned leading-relaxed font-light">
+                Untuk mempopulasikan database relasional live Anda di Supabase dengan schema seeder identik, jalankan script Node CLI berikut di terminal repositori lokal Anda:
+              </p>
+            </div>
+
+            <!-- Shell command snippet -->
+            <div class="bg-zinc-950 dark:bg-zinc-900 border border-default/50 rounded-xl p-3 font-mono text-[10px] text-zinc-300 flex items-center justify-between">
+              <span>node scripts/seed.mjs</span>
+              <UButton
+                size="xs"
+                color="neutral"
+                variant="subtle"
+                icon="i-lucide-copy"
+                class="active:scale-95 cursor-pointer text-[9px]"
+                @click="copyCommand"
+              >
+                Salin
+              </UButton>
+            </div>
+
+            <!-- Danger Alert Banner -->
+            <div class="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 rounded-xl p-4 text-left">
+              <div class="flex gap-2">
+                <UIcon name="i-lucide-alert-triangle" class="size-4.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                <div class="space-y-1">
+                  <h5 class="text-xs font-bold text-rose-800 dark:text-rose-300 font-sans">
+                    Peringatan Cascade Purge Database
+                  </h5>
+                  <p class="text-[10px] text-rose-700 dark:text-rose-400 leading-relaxed font-light font-sans">
+                    Menjalankan seeder live di database Supabase akan menghapus seluruh data transaksi sebelumnya (Topological Cascade Purge) yang terkait dengan merchant Anda sebelum mempopulasikan data uji baru. Pastikan Anda tidak menghapus data penting!
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </Motion>

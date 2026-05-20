@@ -16,3 +16,17 @@
   --color-green-900: #0A5331;
   --color-green-950: #052E16;
 }
+
+:root {
+  --ui-radius: 1rem;
+}
+
+.dark {
+  --ui-bg: #09090b; /* obsidian Zinc-950 dark base background */
+  --ui-bg-elevated: #18181b; /* elevated card/dropdown Zinc-900 */
+  --ui-bg-muted: #27272a; /* hover/inactive backgrounds Zinc-800 */
+  --ui-bg-accented: #3f3f46; /* selected active states Zinc-700 */
+  --ui-border: #27272a; /* crisp Zinc-800 borders */
+  --ui-border-muted: #1f1f23; /* very soft Zinc-900/Zinc-800 borders for subtle dividers */
+}
+

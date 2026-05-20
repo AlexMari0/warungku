@@ -56,7 +56,7 @@ const bentoItems = [
 </script>
 
 <template>
-  <div class="min-h-[100dvh] w-full bg-[#f9fafb] dark:bg-zinc-950 font-sans selection:bg-primary/30 selection:text-primary overflow-x-hidden">
+  <div class="min-h-[100dvh] w-full bg-gradient-to-br from-white via-zinc-50/40 to-primary/5 dark:from-zinc-950 dark:via-zinc-900/30 dark:to-primary/5 font-sans selection:bg-primary/30 selection:text-primary overflow-x-hidden">
     <!-- Asymmetric Hero Section -->
     <section class="max-w-7xl mx-auto px-6 md:px-12 pt-24 pb-16 lg:pt-32 lg:pb-24 grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
       <!-- Left Typography (Span 7) -->
@@ -116,48 +116,61 @@ const bentoItems = [
       </div>
 
       <!-- Right Visual/Abstract (Span 5) -->
-      <div class="lg:col-span-5 relative w-full aspect-square md:aspect-auto md:h-[500px]">
+      <div class="lg:col-span-5 relative w-full aspect-square md:aspect-auto md:h-[500px] flex items-center justify-center">
+        <!-- Ambient Green Glowing Spotlight Orb -->
+        <div class="absolute -right-12 top-12 w-[400px] h-[400px] rounded-full bg-primary/20 blur-3xl opacity-70 pointer-events-none select-none z-0" />
+        
+        <!-- Decorative grid watermark in background -->
+        <div class="absolute inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px] dark:bg-[radial-gradient(#1e293b_1px,transparent_1px)] opacity-60 rounded-[3rem] pointer-events-none z-0" />
+
         <ClientOnly>
           <!-- Abstract Floating UI Element to represent POS/Data -->
           <Motion
             :initial="{ opacity: 0, scale: 0.8, rotate: -5 }"
             :animate="{ opacity: 1, scale: 1, rotate: 0 }"
             :transition="{ duration: 1.2, type: 'spring', bounce: 0.3, delay: 0.2 }"
-            class="absolute right-0 top-1/2 -translate-y-1/2 w-[110%] max-w-[500px] bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.1)] rounded-[3rem] p-8 overflow-hidden"
+            class="absolute right-0 top-1/2 -translate-y-1/2 w-[110%] max-w-[500px] bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.1)] rounded-[3rem] p-8 overflow-hidden pointer-events-none select-none z-10"
           >
             <!-- Liquid Glass Refraction Border -->
             <div class="absolute inset-0 rounded-[3rem] border border-white/40 dark:border-white/5 pointer-events-none" />
 
             <div class="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-6 mb-6">
               <div class="flex gap-3">
-                <div class="w-3 h-3 rounded-full bg-error/80" />
-                <div class="w-3 h-3 rounded-full bg-warning/80" />
-                <div class="w-3 h-3 rounded-full bg-success/80" />
+                <div class="w-3 h-3 rounded-full bg-error/85" />
+                <div class="w-3 h-3 rounded-full bg-warning/85" />
+                <div class="w-3 h-3 rounded-full bg-success/85" />
               </div>
-              <div class="h-2 w-24 bg-zinc-100 dark:bg-zinc-800 rounded-full" />
+              <span class="text-[9px] font-extrabold tracking-widest text-zinc-400 dark:text-zinc-500 uppercase px-2.5 py-0.5 rounded-md bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800/80">
+                Ilustrasi Preview
+              </span>
             </div>
 
-            <!-- Perpetual Auto-Scrolling List Mockup -->
-            <div class="space-y-4">
-              <Motion
-                v-for="i in 4"
-                :key="i"
-                :animate="{ x: ['100%', '0%'] }"
-                :transition="{ duration: 0.6, type: 'spring', bounce: 0.2, delay: 0.4 + (i * 0.1) }"
-                class="flex items-center gap-4 p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50"
-              >
-                <div class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <UIcon
-                    name="i-lucide-shopping-cart"
-                    class="text-primary size-5"
-                  />
-                </div>
-                <div class="flex-1 space-y-2">
-                  <div class="h-2.5 w-1/2 bg-zinc-200 dark:bg-zinc-700 rounded-full" />
-                  <div class="h-2 w-1/3 bg-zinc-100 dark:bg-zinc-800 rounded-full" />
-                </div>
-                <div class="h-3 w-16 bg-primary/20 rounded-full" />
-              </Motion>
+            <!-- Perpetual Auto-Scrolling List Mockup with Fade Out -->
+            <div class="relative overflow-hidden">
+              <div class="space-y-4">
+                <Motion
+                  v-for="i in 4"
+                  :key="i"
+                  :animate="{ x: ['100%', '0%'] }"
+                  :transition="{ duration: 0.6, type: 'spring', bounce: 0.2, delay: 0.4 + (i * 0.1) }"
+                  class="flex items-center gap-4 p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50"
+                  :class="i === 4 ? 'opacity-20' : i === 3 ? 'opacity-60' : 'opacity-100'"
+                >
+                  <div class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <UIcon
+                      name="i-lucide-shopping-cart"
+                      class="text-primary size-5"
+                    />
+                  </div>
+                  <div class="flex-1 space-y-2">
+                    <div class="h-2.5 w-1/2 bg-zinc-200 dark:bg-zinc-700 rounded-full" />
+                    <div class="h-2 w-1/3 bg-zinc-100 dark:bg-zinc-800 rounded-full" />
+                  </div>
+                  <div class="h-3 w-16 bg-primary/20 rounded-full" />
+                </Motion>
+              </div>
+              <!-- Elegant fade-out covering the bottom elements -->
+              <div class="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white dark:from-zinc-900 to-transparent pointer-events-none" />
             </div>
           </Motion>
         </ClientOnly>

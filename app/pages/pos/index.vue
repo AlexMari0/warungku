@@ -40,7 +40,31 @@ const cart = ref<CartItem[]>([])
 // Customer & Transaction details
 const selectedCustomerId = ref<string>('general')
 const orderNotes = ref('')
-const discountAmount = ref<number>(0)
+const discountType = ref<'rp' | 'percent'>('rp')
+const discountValue = ref<number>(0)
+const viewMode = ref<'grid' | 'list'>('grid')
+const salesFrequency = ref<Record<string, number>>({})
+
+const discountAmount = computed(() => {
+  if (discountType.value === 'percent') {
+    const pct = Math.max(0, Math.min(100, Number(discountValue.value) || 0))
+    return Math.round((cartSubtotal.value * pct) / 100)
+  }
+  return Math.max(0, Number(discountValue.value) || 0)
+})
+
+const bestSellers = computed(() => {
+  return products.value
+    .filter(p => p.is_active && p.stock_qty > 0)
+    .map(p => ({
+      ...p,
+      salesCount: salesFrequency.value[p.id] || 0
+    }))
+    .filter(p => p.salesCount > 0)
+    .sort((a, b) => b.salesCount - a.salesCount)
+    .slice(0, 3)
+})
+
 type PaymentMethod = 'cash' | 'qris' | 'gopay' | 'ovo' | 'dana' | 'transfer'
 const paymentMethod = ref<PaymentMethod>('cash')
 const amountPaid = ref<number | null>(null)
@@ -103,6 +127,40 @@ const defaultDemoProducts = [
   }
 ]
 
+const defaultDemoOrders = [
+  {
+    id: 'order-demo-1',
+    merchant_id: 'demo-merchant-id',
+    customer_id: 'cust-1',
+    order_number: 'WK-20260520-0001',
+    status: 'paid',
+    subtotal: 19000,
+    discount_amount: 0,
+    total_amount: 19000,
+    notes: 'Pembelian rutin pagi',
+    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
+    items: [
+      { product_id: 'prod-1', quantity: 2, unit_price: 3500, discount: 0, subtotal: 7000 },
+      { product_id: 'prod-2', quantity: 1, unit_price: 12000, discount: 0, subtotal: 12000 }
+    ]
+  },
+  {
+    id: 'order-demo-2',
+    merchant_id: 'demo-merchant-id',
+    customer_id: 'cust-2',
+    order_number: 'WK-20260520-0002',
+    status: 'paid',
+    subtotal: 10500,
+    discount_amount: 0,
+    total_amount: 10500,
+    notes: null,
+    created_at: new Date(Date.now() - 3600000 * 5).toISOString(),
+    items: [
+      { product_id: 'prod-1', quantity: 3, unit_price: 3500, discount: 0, subtotal: 10500 }
+    ]
+  }
+]
+
 function readDemoList<T>(key: string, fallback: T[]): T[] {
   try {
     const raw = localStorage.getItem(key)
@@ -116,7 +174,11 @@ function readDemoList<T>(key: string, fallback: T[]): T[] {
 
 function writeDemoList<T>(key: string, value: T[]) {
   try {
-    localStorage.setItem(key, JSON.stringify(value))
+    let finalValue = value
+    if (key === 'warungku_movements' && value.length > 100) {
+      finalValue = value.slice(0, 100)
+    }
+    localStorage.setItem(key, JSON.stringify(finalValue))
   } catch {}
 }
 
@@ -142,6 +204,19 @@ async function fetchPOSContext() {
     writeDemoList('warungku_products', products.value)
     writeDemoList('warungku_customers', customers.value)
 
+    // Compute sales frequency from local storage orders
+    const demoOrders = readDemoList<any>('warungku_orders', defaultDemoOrders)
+    writeDemoList('warungku_orders', demoOrders)
+    const freq: Record<string, number> = {}
+    for (const order of demoOrders) {
+      if (Array.isArray(order.items)) {
+        for (const item of order.items) {
+          freq[item.product_id] = (freq[item.product_id] || 0) + (item.quantity || 0)
+        }
+      }
+    }
+    salesFrequency.value = freq
+
     loading.value = false
     return
   }
@@ -159,6 +234,16 @@ async function fetchPOSContext() {
     categories.value = catData || []
     products.value = prodData || []
     customers.value = custData || []
+
+    // Fetch order items and calculate sales frequencies for live mode
+    const { data: itemsData } = await (supabase.from('order_items') as any).select('product_id, quantity')
+    const freq: Record<string, number> = {}
+    if (itemsData) {
+      for (const item of (itemsData as any[])) {
+        freq[item.product_id] = (freq[item.product_id] || 0) + (item.quantity || 0)
+      }
+    }
+    salesFrequency.value = freq
   } catch (err: any) {
     toast.add({
       title: 'Gagal memuat POS',
@@ -330,19 +415,6 @@ async function handleCheckout() {
         ? customers.value.find(c => c.id === selectedCustomerId.value) || null
         : null
 
-      const orderPayload = {
-        id: orderId,
-        merchant_id: 'demo-merchant-id',
-        customer_id: selectedCustomerId.value !== 'general' ? selectedCustomerId.value : null,
-        order_number: orderNumber,
-        status: 'paid',
-        subtotal: cartSubtotal.value,
-        discount_amount: discountAmount.value,
-        total_amount: finalTotal,
-        notes: orderNotes.value || null,
-        created_at: new Date().toISOString()
-      }
-
       // Decrement product stocks reactively
       let localProducts = readDemoList('warungku_products', products.value.length ? products.value : defaultDemoProducts)
       const localMovements = readDemoList<any>('warungku_movements', [])
@@ -401,8 +473,22 @@ async function handleCheckout() {
         customers.value = localCusts
       }
 
+      const orderPayload = {
+        id: orderId,
+        merchant_id: 'demo-merchant-id',
+        customer_id: selectedCustomerId.value !== 'general' ? selectedCustomerId.value : null,
+        order_number: orderNumber,
+        status: 'paid',
+        subtotal: cartSubtotal.value,
+        discount_amount: discountAmount.value,
+        total_amount: finalTotal,
+        notes: orderNotes.value || null,
+        created_at: new Date().toISOString(),
+        items: orderItemsList
+      }
+
       // Save transactions
-      const ordersList = readDemoList<any>('warungku_orders', [])
+      const ordersList = readDemoList<any>('warungku_orders', defaultDemoOrders)
       ordersList.unshift(orderPayload)
       writeDemoList('warungku_orders', ordersList)
       writeDemoList('warungku_products', localProducts)
@@ -424,6 +510,11 @@ async function handleCheckout() {
         items: orderItemsList,
         payment: demoPayment,
         customer: activeCustomer
+      }
+
+      // Proactively update sales frequency in memory for instant best sellers re-ranking
+      for (const item of cart.value) {
+        salesFrequency.value[item.product_id] = (salesFrequency.value[item.product_id] || 0) + item.quantity
       }
 
       toast.add({
@@ -507,7 +598,8 @@ function resetPOSRegister() {
   cart.value = []
   selectedCustomerId.value = 'general'
   orderNotes.value = ''
-  discountAmount.value = 0
+  discountValue.value = 0
+  discountType.value = 'rp'
   amountPaid.value = null
   paymentMethod.value = 'cash'
   completedOrder.value = null
@@ -545,21 +637,42 @@ onMounted(() => {
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shrink-0">
         <div>
           <h1 class="text-2xl font-black text-default tracking-tight flex items-center gap-2">
-            🖥️ Kasir Digital POS
+            <UIcon name="i-lucide-monitor" class="size-6 text-primary shrink-0" />
+            <span>Kasir Digital POS</span>
           </h1>
           <p class="text-muted text-xs mt-0.5">
             Pilih produk, sesuaikan kuantitas, dan proses checkout instan.
           </p>
         </div>
-
-        <div class="w-full sm:max-w-xs">
+        <div class="flex items-center gap-2 w-full sm:max-w-md justify-end">
           <UInput
             v-model="searchQuery"
             icon="i-lucide-search"
             placeholder="Cari nama atau SKU produk..."
             size="md"
-            class="w-full"
+            class="flex-grow sm:max-w-xs"
           />
+          <!-- View Toggle Segmented Control -->
+          <div class="flex rounded-xl bg-muted/40 p-0.5 border border-default shrink-0">
+            <UButton
+              icon="i-lucide-grid"
+              :color="viewMode === 'grid' ? 'primary' : 'neutral'"
+              variant="ghost"
+              size="sm"
+              class="rounded-lg p-1.5 active:scale-[0.98]"
+              :class="viewMode === 'grid' ? 'bg-elevated shadow-xs' : ''"
+              @click="viewMode = 'grid'"
+            />
+            <UButton
+              icon="i-lucide-list"
+              :color="viewMode === 'list' ? 'primary' : 'neutral'"
+              variant="ghost"
+              size="sm"
+              class="rounded-lg p-1.5 active:scale-[0.98]"
+              :class="viewMode === 'list' ? 'bg-elevated shadow-xs' : ''"
+              @click="viewMode = 'list'"
+            />
+          </div>
         </div>
       </div>
 
@@ -621,13 +734,13 @@ onMounted(() => {
         </div>
 
         <div
-          v-else
-          class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"
+          v-else-if="viewMode === 'grid'"
+          class="grid grid-cols-3 md:grid-cols-4 gap-3"
         >
           <div
             v-for="p in filteredProducts"
             :key="p.id"
-            class="group bg-muted/20 hover:bg-muted/30 border border-default/60 hover:border-primary/40 rounded-2xl p-4 transition-all duration-300 flex flex-col justify-between relative overflow-hidden"
+            class="group bg-muted/20 hover:bg-muted/30 border border-default/60 hover:border-primary/40 rounded-2xl p-3 transition-all duration-300 flex flex-col justify-between relative overflow-hidden active:scale-[0.98]"
             :class="[p.stock_qty <= 0 ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer']"
             @click="p.stock_qty > 0 ? addToCart(p) : null"
           >
@@ -635,8 +748,8 @@ onMounted(() => {
             <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
             <div class="relative flex flex-col gap-2">
-              <!-- Photo placeholder or URL -->
-              <div class="aspect-square w-full rounded-xl bg-elevated border border-default flex items-center justify-center overflow-hidden shrink-0">
+              <!-- Photo placeholder or URL (shrunk to fit 3-4 columns elegantly) -->
+              <div class="relative w-full h-20 sm:h-24 rounded-xl bg-elevated border border-default flex items-center justify-center overflow-hidden shrink-0">
                 <img
                   v-if="p.image_url"
                   :src="p.image_url"
@@ -648,50 +761,135 @@ onMounted(() => {
                   name="i-lucide-image"
                   class="size-6 text-muted"
                 />
+
+                <!-- Badges overlay placed inside image wrapper for absolute visibility -->
+                <div
+                  v-if="p.stock_qty <= p.min_stock && p.stock_qty > 0"
+                  class="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-lg bg-amber-500 text-white text-[9px] font-extrabold shadow-sm"
+                >
+                  Menipis
+                </div>
+                <div
+                  v-if="p.stock_qty <= 0"
+                  class="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-lg bg-rose-500 text-white text-[9px] font-extrabold shadow-sm"
+                >
+                  Habis
+                </div>
               </div>
 
               <!-- Product Details -->
-              <div class="overflow-hidden mt-1">
-                <h4 class="font-bold text-sm text-default truncate group-hover:text-primary transition-colors leading-tight">
+              <div class="overflow-hidden mt-0.5">
+                <h4 class="font-bold text-xs sm:text-sm text-default truncate group-hover:text-primary transition-colors leading-tight">
                   {{ p.name }}
                 </h4>
-                <p class="text-[10px] text-muted truncate mt-0.5 font-mono">
-                  SKU: {{ p.sku || 'No SKU' }}
+                <p class="text-[9px] text-muted truncate mt-0.5 font-mono">
+                  {{ p.sku || 'No SKU' }}
                 </p>
               </div>
             </div>
 
             <!-- Price and Add button -->
-            <div class="relative flex items-end justify-between mt-3 pt-2 border-t border-default/40">
-              <div class="flex flex-col">
-                <span class="text-xs text-muted">Stok: {{ p.stock_qty }} {{ p.unit }}</span>
-                <span class="font-extrabold text-sm text-default mt-0.5">{{ formatRupiah(p.sell_price) }}</span>
+            <div class="relative flex items-end justify-between mt-2.5 pt-2 border-t border-default/40">
+              <div class="flex flex-col min-w-0">
+                <span class="text-[10px] text-muted truncate">
+                  Stok: <strong class="font-mono">{{ p.stock_qty }}</strong> {{ p.unit }}
+                </span>
+                <span class="font-extrabold text-xs sm:text-sm text-default mt-0.5 font-mono truncate">
+                  {{ formatRupiah(p.sell_price) }}
+                </span>
               </div>
 
-              <!-- Quick Add Action -->
+              <!-- Quick Add Touch-Friendly Action Button (Enlarged) -->
               <div
-                class="size-8 rounded-xl bg-primary text-inverted flex items-center justify-center shadow-md shadow-primary/20 transition-all duration-200 group-hover:scale-105"
+                class="w-10 h-10 rounded-xl bg-primary text-inverted flex items-center justify-center shadow-md shadow-primary/20 transition-all duration-200 group-hover:scale-110 active:scale-95 shrink-0"
                 :class="[p.stock_qty <= 0 ? 'bg-muted text-toned shadow-none cursor-not-allowed' : '']"
               >
                 <UIcon
                   :name="p.stock_qty <= 0 ? 'i-lucide-x' : 'i-lucide-plus'"
-                  class="size-4 stroke-[3]"
+                  class="size-5 stroke-[3]"
                 />
               </div>
             </div>
+          </div>
+        </div>
 
-            <!-- Badges overlay -->
-            <div
-              v-if="p.stock_qty <= p.min_stock && p.stock_qty > 0"
-              class="absolute top-2 left-2 px-1.5 py-0.5 rounded-lg bg-warning/10 border border-warning/30 text-[9px] font-bold text-warning backdrop-blur-sm"
-            >
-              Menipis
+        <div
+          v-else-if="viewMode === 'list'"
+          class="flex flex-col gap-2"
+        >
+          <div
+            v-for="p in filteredProducts"
+            :key="p.id"
+            class="group bg-muted/20 hover:bg-muted/30 border border-default/60 hover:border-primary/40 rounded-2xl p-2.5 transition-all duration-300 flex items-center justify-between gap-3 relative overflow-hidden active:scale-[0.99]"
+            :class="[p.stock_qty <= 0 ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer']"
+            @click="p.stock_qty > 0 ? addToCart(p) : null"
+          >
+            <!-- Hover shadow effect -->
+            <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+            <!-- Left: Product Image & Details -->
+            <div class="flex items-center gap-3 overflow-hidden min-w-0 relative">
+              <!-- Small high-density image -->
+              <div class="relative w-12 h-12 rounded-xl bg-elevated border border-default flex items-center justify-center overflow-hidden shrink-0">
+                <img
+                  v-if="p.image_url"
+                  :src="p.image_url"
+                  alt=""
+                  class="size-full object-cover group-hover:scale-105 transition-transform duration-300"
+                >
+                <UIcon
+                  v-else
+                  name="i-lucide-image"
+                  class="size-5 text-muted"
+                />
+                
+                <!-- Stock badges overlay -->
+                <div
+                  v-if="p.stock_qty <= 0"
+                  class="absolute inset-0 bg-rose-950/70 text-white flex items-center justify-center text-[9px] font-extrabold"
+                >
+                  Habis
+                </div>
+              </div>
+
+              <!-- Product text details -->
+              <div class="overflow-hidden">
+                <h4 class="font-bold text-sm text-default truncate group-hover:text-primary transition-colors leading-tight">
+                  {{ p.name }}
+                </h4>
+                <div class="flex items-center gap-2 mt-1">
+                  <span class="text-[10px] text-muted font-mono bg-muted/50 px-1.5 py-0.5 rounded">
+                    {{ p.sku || 'No SKU' }}
+                  </span>
+                  <span class="text-[10px] text-toned">
+                    Stok: <strong class="font-mono">{{ p.stock_qty }}</strong> {{ p.unit }}
+                  </span>
+                  <span
+                    v-if="p.stock_qty <= p.min_stock && p.stock_qty > 0"
+                    class="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 text-[9px] font-bold"
+                  >
+                    Menipis
+                  </span>
+                </div>
+              </div>
             </div>
-            <div
-              v-if="p.stock_qty <= 0"
-              class="absolute top-2 left-2 px-1.5 py-0.5 rounded-lg bg-error/10 border border-error/30 text-[9px] font-bold text-error backdrop-blur-sm"
-            >
-              Habis
+
+            <!-- Right: Price and Touch-Friendly Add button -->
+            <div class="flex items-center gap-4 shrink-0">
+              <span class="font-extrabold text-sm sm:text-base text-default font-mono">
+                {{ formatRupiah(p.sell_price) }}
+              </span>
+
+              <!-- Touch target w-10 h-10 matching grid button -->
+              <div
+                class="w-10 h-10 rounded-xl bg-primary text-inverted flex items-center justify-center shadow-md shadow-primary/20 transition-all duration-200 group-hover:scale-110 active:scale-95 shrink-0"
+                :class="[p.stock_qty <= 0 ? 'bg-muted text-toned shadow-none cursor-not-allowed' : '']"
+              >
+                <UIcon
+                  :name="p.stock_qty <= 0 ? 'i-lucide-x' : 'i-lucide-plus'"
+                  class="size-5 stroke-[3]"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -702,16 +900,23 @@ onMounted(() => {
     <div class="w-full xl:w-[460px] shrink-0 bg-elevated rounded-3xl border border-default shadow-sm overflow-hidden flex flex-col p-6 gap-5 h-full">
       <!-- Checkout Basket Title -->
       <div class="flex items-center justify-between shrink-0">
-        <h2 class="text-lg font-black text-default tracking-tight flex items-center gap-2">
-          🛒 Keranjang Belanja
-        </h2>
+        <div class="flex items-center gap-2 min-w-0">
+          <UIcon name="i-lucide-shopping-bag" class="size-5 text-primary shrink-0" />
+          <h2 class="text-lg font-black text-default tracking-tight truncate">
+            Keranjang Belanja
+          </h2>
+          <span class="px-2 py-0.5 rounded-full bg-muted/60 text-toned text-[10px] font-extrabold font-mono shrink-0">
+            {{ totalCartItemsCount }} Item
+          </span>
+        </div>
         <UButton
           v-if="cart.length > 0"
-          label="Kosongkan"
+          label="Batal Transaksi"
+          icon="i-lucide-rotate-ccw"
           color="error"
-          variant="ghost"
+          variant="subtle"
           size="xs"
-          class="font-semibold"
+          class="font-bold rounded-xl active:scale-[0.98] shrink-0"
           @click="resetPOSRegister"
         />
       </div>
@@ -721,12 +926,12 @@ onMounted(() => {
         <!-- Empty Basket layout -->
         <div
           v-if="cart.length === 0"
-          class="flex-grow flex flex-col items-center justify-center py-12 text-center"
+          class="flex-grow flex flex-col items-center justify-center py-8 text-center"
         >
-          <div class="size-16 rounded-full bg-primary/5 flex items-center justify-center text-primary mb-3">
+          <div class="size-14 rounded-full bg-primary/5 flex items-center justify-center text-primary mb-2.5">
             <UIcon
               name="i-lucide-shopping-cart"
-              class="size-8"
+              class="size-7"
             />
           </div>
           <h4 class="font-bold text-sm text-default">
@@ -735,6 +940,51 @@ onMounted(() => {
           <p class="text-xs text-muted max-w-xs mt-1">
             Pilih produk di panel sebelah kiri untuk memulai pencatatan kasir.
           </p>
+
+          <!-- Best Selling Products Shortcuts (Quick Add) -->
+          <div v-if="bestSellers.length > 0" class="mt-8 w-full border-t border-default/40 pt-6">
+            <span class="text-[10px] font-extrabold text-muted uppercase tracking-wider flex items-center gap-1.5 text-left mb-3">
+              <UIcon name="i-lucide-zap" class="size-3.5 text-amber-500 shrink-0" />
+              <span>Produk Terlaris (Quick Add)</span>
+            </span>
+            <div class="flex flex-col gap-2">
+              <button
+                v-for="p in bestSellers"
+                :key="'best-' + p.id"
+                type="button"
+                class="flex items-center justify-between p-3 rounded-2xl bg-muted/20 hover:bg-primary/5 border border-default hover:border-primary/30 transition-all text-left active:scale-[0.98] w-full cursor-pointer"
+                @click="addToCart(p)"
+              >
+                <div class="flex items-center gap-2.5 overflow-hidden">
+                  <div class="w-8 h-8 rounded-lg bg-elevated border border-default overflow-hidden shrink-0 flex items-center justify-center">
+                    <img
+                      v-if="p.image_url"
+                      :src="p.image_url"
+                      alt=""
+                      class="size-full object-cover"
+                    >
+                    <UIcon
+                      v-else
+                      name="i-lucide-image"
+                      class="size-4 text-muted"
+                    />
+                  </div>
+                  <div class="overflow-hidden">
+                    <div class="font-bold text-xs text-default truncate leading-tight">{{ p.name }}</div>
+                    <span class="text-[10px] text-muted font-mono leading-none">
+                      Stok: <strong class="font-mono font-bold">{{ p.stock_qty }}</strong> {{ p.unit }}
+                    </span>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                  <span class="font-extrabold text-xs text-default font-mono">{{ formatRupiah(p.sell_price) }}</span>
+                  <div class="size-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                    <UIcon name="i-lucide-plus" class="size-3.5 stroke-[3]" />
+                  </div>
+                </div>
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- Populated cart list -->
@@ -817,23 +1067,53 @@ onMounted(() => {
           />
         </div>
 
-        <!-- Global Discount -->
-        <div class="flex items-center gap-3">
-          <span class="text-xs text-toned shrink-0 font-medium">Potongan/Diskon (Rp):</span>
-          <div class="flex-grow">
-            <UInput
-              v-model.number="discountAmount"
-              type="number"
-              min="0"
-              placeholder="0"
-              size="xs"
-              class="w-full"
-            >
-              <template #leading>
-                <span class="text-[10px] text-muted px-1">Rp</span>
-              </template>
-            </UInput>
+        <!-- Global Discount Toggle and Input -->
+        <div class="flex flex-col gap-1.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-toned font-semibold">Potongan / Diskon</span>
+            <!-- Segmented Selector -->
+            <div class="flex rounded-lg bg-muted/40 p-0.5 border border-default text-[10px]">
+              <button
+                type="button"
+                class="px-2 py-0.5 rounded-md transition-all font-extrabold cursor-pointer"
+                :class="[discountType === 'rp' ? 'bg-elevated text-primary shadow-xs' : 'text-muted hover:text-default']"
+                @click="discountType = 'rp'"
+              >
+                Rupiah (Rp)
+              </button>
+              <button
+                type="button"
+                class="px-2 py-0.5 rounded-md transition-all font-extrabold cursor-pointer"
+                :class="[discountType === 'percent' ? 'bg-elevated text-primary shadow-xs' : 'text-muted hover:text-default']"
+                @click="discountType = 'percent'"
+              >
+                Persen (%)
+              </button>
+            </div>
           </div>
+          <div class="flex items-center gap-2">
+            <div class="flex-grow">
+              <UInput
+                v-model.number="discountValue"
+                type="number"
+                min="0"
+                :max="discountType === 'percent' ? 100 : undefined"
+                :placeholder="discountType === 'percent' ? 'Contoh: 10' : '0'"
+                size="sm"
+                class="w-full font-mono font-bold"
+              >
+                <template #leading>
+                  <span class="text-xs text-muted font-bold px-1">
+                    {{ discountType === 'percent' ? '%' : 'Rp' }}
+                  </span>
+                </template>
+              </UInput>
+            </div>
+          </div>
+          <!-- Show calculated absolute discount when percent is selected -->
+          <span v-if="discountType === 'percent' && discountValue > 0" class="text-[10px] font-mono text-muted text-right block">
+            Setara dengan: <strong class="text-default font-bold">{{ formatRupiah(discountAmount) }}</strong>
+          </span>
         </div>
 
         <!-- Payment Method Grid -->
@@ -927,18 +1207,30 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Major CTA Button -->
-        <UButton
-          label="PROSES PEMBAYARAN"
-          icon="i-lucide-arrow-right-circle"
-          color="primary"
-          size="lg"
-          block
-          :disabled="cart.length === 0"
-          :loading="processingCheckout"
-          class="rounded-2xl font-black shadow-lg shadow-primary/20 py-3.5 transition-all active:scale-[0.98]"
-          @click="handleCheckout"
-        />
+        <!-- Major CTA Button & Cancel Buttons -->
+        <div class="flex items-center gap-3">
+          <UButton
+            v-if="cart.length > 0"
+            label="BATAL"
+            icon="i-lucide-trash-2"
+            color="error"
+            variant="subtle"
+            size="lg"
+            class="rounded-2xl font-extrabold px-5 py-3.5 transition-all active:scale-[0.98] shrink-0"
+            @click="resetPOSRegister"
+          />
+          <UButton
+            label="PROSES PEMBAYARAN"
+            icon="i-lucide-arrow-right-circle"
+            color="primary"
+            size="lg"
+            :class="[cart.length > 0 ? 'flex-grow' : 'w-full']"
+            :disabled="cart.length === 0"
+            :loading="processingCheckout"
+            class="rounded-2xl font-black shadow-lg shadow-primary/20 py-3.5 transition-all active:scale-[0.98]"
+            @click="handleCheckout"
+          />
+        </div>
       </div>
     </div>
 
