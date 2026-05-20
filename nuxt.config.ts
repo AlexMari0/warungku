@@ -6,6 +6,15 @@ export default defineNuxtConfig({
     '@nuxtjs/supabase'
   ],
 
+  runtimeConfig: {
+    public: {
+      supabase: {
+        url: (globalThis as any).process?.env?.SUPABASE_URL || (globalThis as any).process?.env?.NUXT_PUBLIC_SUPABASE_URL,
+        key: (globalThis as any).process?.env?.SUPABASE_KEY || (globalThis as any).process?.env?.NUXT_PUBLIC_SUPABASE_KEY
+      }
+    }
+  },
+
   devtools: {
     enabled: true
   },
