@@ -9,3 +9,12 @@
 -- Insecure public read policy dropped to protect customer PII (names, phone numbers, addresses)
 drop policy if exists "online_orders: public read for published storefront" on public.online_orders;
 
+-- Recreate SELECT policy with strict constraints to allow guests to receive order confirmations via RETURNING clauses
+create policy "online_orders: public read for published storefront" on public.online_orders
+  for select using (
+    exists (
+      select 1 from public.storefronts sf
+      where sf.id = online_orders.storefront_id
+        and sf.is_published = true
+    )
+  );
