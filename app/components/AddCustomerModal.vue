@@ -20,9 +20,6 @@ const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 const toast = useToast()
 const submittings = ref(false)
-
-const { isDemo } = useDemoMode()
-
 const customerSchema = z.object({
   name: z.string().min(3, 'Nama pelanggan minimal 3 karakter'),
   phone: z.string().optional().or(z.literal(''))
@@ -41,49 +38,8 @@ function resetForm() {
 }
 
 async function onSubmit(event: FormSubmitEvent<CustomerSchema>) {
-  submittings.value = true
-
-  if (isDemo.value) {
-    // Demo Mode: Local Storage
-    const newCustomer = {
-      id: `cust-${Date.now()}`,
-      merchant_id: 'demo-merchant-id',
-      name: event.data.name,
-      phone: event.data.phone || null,
-      total_debt: 0,
-      loyalty_points: 0,
-      created_at: new Date().toISOString()
-    }
-
-    try {
-      const rawCusts = localStorage.getItem('warungku_customers')
-      const customersList = rawCusts ? JSON.parse(rawCusts) : []
-      customersList.unshift(newCustomer)
-      localStorage.setItem('warungku_customers', JSON.stringify(customersList))
-
-      toast.add({
-        title: 'Pelanggan ditambahkan',
-        description: `Pelanggan "${newCustomer.name}" berhasil terdaftar (Mode Demo).`,
-        color: 'success'
-      })
-
-      emit('saved', newCustomer)
-      isOpen.value = false
-      resetForm()
-    } catch (err: any) {
-      toast.add({
-        title: 'Gagal menambahkan pelanggan',
-        description: err.message,
-        color: 'error'
-      })
-    } finally {
-      submittings.value = false
-    }
-    return
-  }
-
-  // Live Mode: Supabase
   if (!user.value) return
+  submittings.value = true
   try {
     let merchantId = user.value.id
     try {

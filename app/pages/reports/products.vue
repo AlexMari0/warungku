@@ -7,59 +7,11 @@ const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 const toast = useToast()
 
-const { isDemo } = useDemoMode()
-
 const loading = ref(false)
 const salesData = ref<any[]>([])
 const period = ref<'daily' | 'weekly' | 'monthly'>('monthly')
 
 async function fetchProductSales() {
-  if (isDemo.value) {
-    loading.value = true
-    setTimeout(() => {
-      salesData.value = [
-        {
-          id: 's-1',
-          products: { 
-            name: 'Indomie Goreng Aceh', 
-            image_url: 'https://images.unsplash.com/photo-1612927601601-6638404737ce?w=500&auto=format&fit=crop',
-            sku: 'IND-GOR-ACH',
-            categories: { name: 'Makanan', color: '#10b981' }
-          },
-          quantity_sold: 45,
-          revenue: 157500,
-          gross_profit: 45000
-        },
-        {
-          id: 's-2',
-          products: { 
-            name: 'Kopi Susu Gula Aren', 
-            image_url: 'https://images.unsplash.com/photo-1541167760496-1628856ab772?w=500&auto=format&fit=crop',
-            sku: 'KOPI-AREN-01',
-            categories: { name: 'Minuman', color: '#0284c7' }
-          },
-          quantity_sold: 28,
-          revenue: 336000,
-          gross_profit: 112000
-        },
-        {
-          id: 's-3',
-          products: { 
-            name: 'Rokok Surya 12', 
-            image_url: null,
-            sku: 'ROK-SUR-12',
-            categories: { name: 'Rokok & Tembakau', color: '#f43f5e' }
-          },
-          quantity_sold: 15,
-          revenue: 330000,
-          gross_profit: 30000
-        }
-      ].sort((a, b) => b.quantity_sold - a.quantity_sold)
-      loading.value = false
-    }, 500)
-    return
-  }
-
   if (!user.value) return
   loading.value = true
 

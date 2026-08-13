@@ -1,12 +1,11 @@
 export default defineNuxtRouteMiddleware((to) => {
   const user = useSupabaseUser()
-  const { isDemo } = useDemoMode()
   const path = to.path.replace(/\/$/, '') || '/'
 
   // Public routes that don't require authentication
   const publicRoutes = ['/login', '/signup', '/forgot-password', '/reset-password']
 
-  const isAuthenticated = computed(() => !!user.value || isDemo.value)
+  const isAuthenticated = computed(() => !!user.value)
 
   const isPublicRoute = publicRoutes.includes(path) || path.startsWith('/store')
 

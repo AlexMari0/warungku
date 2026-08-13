@@ -10,8 +10,7 @@ const supabase = useSupabaseClient()
 const toast = useToast()
 const colorMode = useColorMode()
 
-const slug = computed(() => (route.params.slug as string) || 'demo-store')
-const isDemoStore = computed(() => slug.value === 'demo-store' || slug.value === 'warung-demo-kita')
+const slug = computed(() => (route.params.slug as string) || '')
 
 // Loading states
 const loading = ref(true)
@@ -52,62 +51,19 @@ async function fetchStorefront() {
   loading.value = true
   storeNotFound.value = false
   try {
-    if (isDemoStore.value) {
-      // Load from demo local storage
-      const rawSf = localStorage.getItem('warungku_storefront')
-      if (rawSf) {
-        storeInfo.value = JSON.parse(rawSf)
-      } else {
-        storeInfo.value = {
-          id: 'sf-demo-1',
-          slug: 'warung-demo-kita',
-          display_name: 'Warung Demo Kita',
-          description: 'Penyedia bahan harian terlengkap, hemat biaya, dan terpercaya bagi masyarakat luas.',
-          banner_url: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=800&auto=format&fit=crop&q=80',
-          theme_color: 'emerald',
-          is_published: true
-        }
-      }
+    // Load live from Supabase
+    const { data: sfData, error: sfError } = await (supabase
+      .from('storefronts') as any)
+      .select('*')
+      .eq('slug', slug.value)
+      .eq('is_published', true)
+      .maybeSingle()
 
-      // Load mock categories & products
-      const rawCats = localStorage.getItem('warungku_categories')
-      categories.value = rawCats ? JSON.parse(rawCats) : []
-
-      const rawProds = localStorage.getItem('warungku_products')
-      const rawSfp = localStorage.getItem('warungku_storefront_products')
-      
-      const prodsList = rawProds ? JSON.parse(rawProds) : []
-      const sfpList = rawSfp ? JSON.parse(rawSfp) : []
-
-      const linkedProds: any[] = []
-      sfpList.forEach((sfp: any) => {
-        const matchingProd = prodsList.find((p: any) => p.id === sfp.product_id)
-        if (matchingProd) {
-          linkedProds.push({
-            id: sfp.id,
-            product_id: sfp.product_id,
-            is_featured: sfp.is_featured,
-            custom_description: sfp.custom_description,
-            products: matchingProd
-          })
-        }
-      })
-      storefrontProducts.value = linkedProds
-
-    } else {
-      // Load live from Supabase
-      const { data: sfData, error: sfError } = await (supabase
-        .from('storefronts') as any)
-        .select('*')
-        .eq('slug', slug.value)
-        .eq('is_published', true)
-        .maybeSingle()
-
-      if (sfError) throw sfError
-      if (!sfData) {
-        storeNotFound.value = true
-        return
-      }
+    if (sfError) throw sfError
+    if (!sfData) {
+      storeNotFound.value = true
+      return
+    }
 
       storeInfo.value = sfData
 
@@ -136,7 +92,6 @@ async function fetchStorefront() {
       } else {
         categories.value = []
       }
-    }
   } catch (err: any) {
     toast.add({
       title: 'Gagal memuat toko',
@@ -272,33 +227,15 @@ async function handleCheckout() {
       status: 'pending'
     }
 
-    if (isDemoStore.value) {
-      // Save test order to local storage ledger
-      const rawOrders = localStorage.getItem('warungku_online_orders')
-      const ordersList = rawOrders ? JSON.parse(rawOrders) : []
-      
-      const newOrder = {
-        id: `online-mock-${Math.floor(1000 + Math.random() * 9000)}`,
-        created_at: new Date().toISOString(),
-        ...orderPayload
-      }
-      
-      ordersList.unshift(newOrder)
-      localStorage.setItem('warungku_online_orders', JSON.stringify(ordersList))
-      
-      lastCreatedOrder.value = newOrder
-      orderSuccess.value = true
-    } else {
-      // Insert to remote database
-      const { data, error } = await (supabase.from('online_orders') as any)
-        .insert(orderPayload)
-        .select()
-        .single()
+    // Insert to remote database
+    const { data, error } = await (supabase.from('online_orders') as any)
+      .insert(orderPayload)
+      .select()
+      .single()
 
-      if (error) throw error
-      lastCreatedOrder.value = data
-      orderSuccess.value = true
-    }
+    if (error) throw error
+    lastCreatedOrder.value = data
+    orderSuccess.value = true
 
     toast.add({
       title: 'Pesanan berhasil dibuat!',
@@ -307,15 +244,13 @@ async function handleCheckout() {
     })
 
     // Track whatsapp click
-    if (!isDemoStore.value) {
-      try {
-        await (supabase as any).rpc('track_storefront_event', {
-          p_slug: slug.value,
-          p_event_type: 'whatsapp_click'
-        })
-      } catch (e) {
-        // Silently fail analytics tracking
-      }
+    try {
+      await (supabase as any).rpc('track_storefront_event', {
+        p_slug: slug.value,
+        p_event_type: 'whatsapp_click'
+      })
+    } catch (e) {
+      // Silently fail analytics tracking
     }
 
     // Auto-open WhatsApp link after checkout commit
@@ -466,8 +401,8 @@ const activeThemeClasses = computed(() => {
 onMounted(async () => {
   await fetchStorefront()
   
-  // Track page view for non-demo storefronts
-  if (!isDemoStore.value && storeInfo.value) {
+  // Track page view
+  if (storeInfo.value) {
     try {
       await (supabase as any).rpc('track_storefront_event', {
         p_slug: slug.value,

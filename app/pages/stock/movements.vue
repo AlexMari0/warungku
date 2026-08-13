@@ -29,64 +29,16 @@ const typeMeta = {
   waste: { label: 'Terbuang/Rusak', icon: 'i-lucide-trash-2', color: 'neutral' }
 }
 
-const { isDemo } = useDemoMode()
-
 // Infinite Scroll / Server-Side Filtering Variables
 const totalLiveCount = ref(0)
 const hasMore = ref(true)
 const serverLoading = ref(false)
 
 const isInfiniteScrollActive = computed(() => {
-  return !isDemo.value && (totalLiveCount.value > 10000)
+  return totalLiveCount.value > 10000
 })
 
 async function fetchMovements(reset = false) {
-  if (isDemo.value) {
-    loading.value = true
-    const raw = localStorage.getItem('warungku_movements')
-    if (raw) {
-      let parsed = JSON.parse(raw)
-      if (Array.isArray(parsed) && parsed.length > 100) {
-        parsed = parsed.slice(0, 100)
-        localStorage.setItem('warungku_movements', JSON.stringify(parsed))
-      }
-      movements.value = parsed
-    } else {
-      const initial = [
-        {
-          id: 'mov-1',
-          merchant_id: 'demo-merchant-id',
-          product_id: 'prod-1',
-          type: 'adjustment',
-          quantity: 40,
-          qty_before: 0,
-          qty_after: 40,
-          unit_cost: 2500,
-          notes: 'Stok awal produk baru Indomie Goreng Aceh (Demo)',
-          created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-          products: { name: 'Indomie Goreng Aceh', sku: 'IND-GOR-ACH', unit: 'pcs' }
-        },
-        {
-          id: 'mov-2',
-          merchant_id: 'demo-merchant-id',
-          product_id: 'prod-2',
-          type: 'adjustment',
-          quantity: 5,
-          qty_before: 0,
-          qty_after: 5,
-          unit_cost: 8000,
-          notes: 'Stok awal produk baru Kopi Susu Gula Aren (Demo)',
-          created_at: new Date(Date.now() - 1000 * 60 * 60 * 1).toISOString(),
-          products: { name: 'Kopi Susu Gula Aren', sku: 'KOPI-AREN-01', unit: 'porsi' }
-        }
-      ]
-      localStorage.setItem('warungku_movements', JSON.stringify(initial))
-      movements.value = initial
-    }
-    loading.value = false
-    return
-  }
-
   if (!user.value) return
 
   // First, check the total count in the database if reset or not set yet

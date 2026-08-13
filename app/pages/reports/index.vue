@@ -7,8 +7,6 @@ const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 const toast = useToast()
 
-const { isDemo } = useDemoMode()
-
 const loading = ref(false)
 const summary = ref<any>(null)
 const summaryComparison = ref<any>(null)
@@ -56,58 +54,6 @@ async function fetchDashboardData() {
   
   const prevStartDate = prevStart.toISOString().split('T')[0] || ''
   const prevEndDate = prevEnd.toISOString().split('T')[0] || ''
-
-  if (isDemo.value) {
-    setTimeout(() => {
-      const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1)
-
-      summary.value = {
-        total_revenue: days * 1250000,
-        gross_profit: days * 450000,
-        total_orders: days * 42,
-        avg_transaction: 29761,
-        total_items_sold: days * 125,
-        storefront_page_views: days * 312,
-        storefront_whatsapp_clicks: days * 86,
-        storefront_conversions: days * 18
-      }
-
-      // Predefined baseline comparison for percentage indicators
-      summaryComparison.value = {
-        total_revenue: 12.4,
-        gross_profit: 9.8,
-        total_orders: 14.3,
-        avg_transaction: -1.2,
-        storefront_page_views: 8.5,
-        storefront_whatsapp_clicks: 10.2,
-        storefront_conversions: 5.6
-      }
-
-      // Generate dummy hourly traffic
-      const dummyTraffic = []
-      for (let i = 10; i <= 22; i++) {
-        const weight = 1 - Math.abs(15 - i) / 7
-        dummyTraffic.push({
-          hour_of_day: i,
-          transaction_count: Math.max(1, Math.floor(weight * 12 * (days > 7 ? 4 : Math.sqrt(days)) + Math.random() * 2)),
-          revenue: Math.max(15000, Math.floor(weight * 200000 * (days > 7 ? 4 : Math.sqrt(days)) + Math.random() * 20000))
-        })
-      }
-      hourlyTraffic.value = dummyTraffic
-
-      // Generate best selling products mock
-      topProducts.value = [
-        { name: 'Indomie Goreng Aceh', sku: 'IND-GOR-ACH', category: 'Makanan', color: '#10b981', qty: days * 18, revenue: days * 63000, profit: days * 18000 },
-        { name: 'Kopi Susu Gula Aren', sku: 'KOPI-AREN-01', category: 'Minuman', color: '#0284c7', qty: days * 12, revenue: days * 144000, profit: days * 48000 },
-        { name: 'Roti Bakar Cokelat', sku: 'ROT-BAK-COK', category: 'Makanan', color: '#10b981', qty: days * 8, revenue: days * 96000, profit: days * 32000 },
-        { name: 'Teh Manis Dingin', sku: 'TEH-MANIS-01', category: 'Minuman', color: '#0284c7', qty: days * 7, revenue: days * 35000, profit: days * 14000 },
-        { name: 'Rokok Sampoerna Mild', sku: 'ROK-SAM-MLD', category: 'Rokok & Tembakau', color: '#f43f5e', qty: days * 3, revenue: days * 90000, profit: days * 9000 }
-      ]
-
-      loading.value = false
-    }, 300)
-    return
-  }
 
   if (!user.value) {
     loading.value = false

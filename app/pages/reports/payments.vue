@@ -7,8 +7,6 @@ const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 const toast = useToast()
 
-const { isDemo } = useDemoMode()
-
 const loading = ref(false)
 const paymentsData = ref<any[]>([])
 const period = ref<'daily' | 'weekly' | 'monthly'>('monthly')
@@ -35,22 +33,6 @@ const paymentTrends: Record<string, number> = {
 }
 
 async function fetchPayments() {
-  if (isDemo.value) {
-    loading.value = true
-    setTimeout(() => {
-      paymentsData.value = [
-        { method: 'cash', transaction_count: 142, total_amount: 3500000 },
-        { method: 'qris', transaction_count: 85, total_amount: 2800000 },
-        { method: 'gopay', transaction_count: 45, total_amount: 1500000 },
-        { method: 'ovo', transaction_count: 30, total_amount: 850000 },
-        { method: 'dana', transaction_count: 12, total_amount: 400000 },
-        { method: 'transfer', transaction_count: 22, total_amount: 1200000 }
-      ].sort((a, b) => b.total_amount - a.total_amount)
-      loading.value = false
-    }, 500)
-    return
-  }
-
   if (!user.value) return
   loading.value = true
 

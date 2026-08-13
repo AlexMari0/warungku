@@ -10,8 +10,6 @@ const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 const toast = useToast()
 
-const { isDemo } = useDemoMode()
-
 // Interfaces
 interface Session {
   id: string
@@ -89,142 +87,10 @@ const promptPresets = [
 ]
 
 // ----------------------------------------------------
-// Data Helpers (Audit context extraction)
-// ----------------------------------------------------
-function getStoreInventoryContext() {
-  let productsList: any[] = []
-  let categoriesList: any[] = []
-
-  if (isDemo.value) {
-    const rawProds = localStorage.getItem('warungku_products')
-    const rawCats = localStorage.getItem('warungku_categories')
-    if (rawProds) productsList = JSON.parse(rawProds)
-    if (rawCats) categoriesList = JSON.parse(rawCats)
-  }
-
-  // Fallback default mock items if empty
-  if (!productsList.length) {
-    productsList = [
-      { name: 'Indomie Goreng Aceh', buy_price: 2500, sell_price: 3500, stock_qty: 40, min_stock: 10, unit: 'pcs' },
-      { name: 'Kopi Susu Gula Aren', buy_price: 8000, sell_price: 12000, stock_qty: 5, min_stock: 10, unit: 'porsi' }
-    ]
-  }
-
-  return { products: productsList, categories: categoriesList }
-}
-
-// ----------------------------------------------------
-// Natural Language Response Generator (Demo Mode)
-// ----------------------------------------------------
-function generateDemoResponse(prompt: string, type: string): string {
-  const { products } = getStoreInventoryContext()
-  const lowStock = products.filter((p: any) => p.stock_qty <= p.min_stock)
-
-  const normalized = prompt.toLowerCase()
-
-  if (normalized.includes('stok') || normalized.includes('audit') || type === 'analysis' && normalized.includes('menipis')) {
-    let response = `### 📊 Laporan Audit Stok WarungKu\n\n`
-    response += `Berdasarkan analisis real-time inventaris Anda, berikut adalah detail produk yang perlu mendapatkan perhatian:\n\n`
-    
-    if (lowStock.length > 0) {
-      response += `| Nama Produk | Stok Saat Ini | Batas Minimum | Status |\n`
-      response += `| :--- | :---: | :---: | :---: |\n`
-      lowStock.forEach((p: any) => {
-        response += `| **${p.name}** | \`${p.stock_qty} ${p.unit}\` | ${p.min_stock} ${p.unit} | ⚠️ Reorder |\n`
-      })
-      response += `\n**Rekomendasi Tindakan:**\n`
-      lowStock.forEach((p: any) => {
-        const orderQty = Math.max(20, p.min_stock * 3 - p.stock_qty)
-        response += `- **${p.name}**: Segera lakukan reorder sebanyak **${orderQty} ${p.unit}** untuk menghindari kehilangan potensi penjualan. Modal estimasi yang dibutuhkan: **Rp ${(orderQty * p.buy_price).toLocaleString('id-ID')}**.\n`
-      })
-    } else {
-      response += `✅ **Semua stok aman!** Tidak ada produk aktif yang berada di bawah ambang batas minimum saat ini.\n`
-    }
-    return response
-  }
-
-  if (normalized.includes('laba') || normalized.includes('margin') || normalized.includes('pendapatan')) {
-    return `### 📈 Laporan Performa & Margin Penjualan\n\n` +
-      `Berikut adalah rangkuman keuangan warung Anda berdasarkan mutasi kasir hari ini:\n\n` +
-      `- **Total Pendapatan kotor**: **Rp 1.250.000**\n` +
-      `- **Laba Kotor (Gross Margin)**: **Rp 450.000** *(36% margin penjualan)*\n` +
-      `- **Rata-rata Nilai Keranjang (AOV)**: **Rp 29.761** per transaksi\n` +
-      `- **Volume Transaksi**: **42 Transaksi Berhasil**\n\n` +
-      `💡 **Insight Strategis:**\n` +
-      `1. Margin produk Anda tergolong sehat di angka **36%**. Ini ditopang oleh tingginya volume penjualan kategori minuman seduh.\n` +
-      `2. Kenaikan transaksi terjadi di jam makan siang (12:00 - 13:00) dan malam (19:00 - 20:00). Pastikan staf kasir siap pada jam-jam sibuk tersebut.`
-  }
-
-  if (normalized.includes('laris') || normalized.includes('terbaik') || normalized.includes('populer')) {
-    return `### 🏆 Produk Terlaris Hari Ini\n\n` +
-      `Berdasarkan data kasir digital, berikut adalah peringkat produk terlaris:\n\n` +
-      `1. **Kopi Susu Gula Aren**\n` +
-      `   - Volume: **24 porsi** terjual\n` +
-      `   - Pendapatan: *Rp 288.000*\n` +
-      `   - Kontribusi Margin: *Rp 96.000*\n\n` +
-      `2. **Indomie Goreng Aceh (Matang)**\n` +
-      `   - Volume: **18 porsi** terjual\n` +
-      `   - Pendapatan: *Rp 63.000*\n` +
-      `   - Kontribusi Margin: *Rp 18.000*\n\n` +
-      `💡 **Rekomendasi Pemasaran:**\n` +
-      `Pertimbangkan bundling paket hemat **"Indomie Goreng + Kopi Susu Aren"** seharga **Rp 14.500** (hemat Rp 1.000) untuk mendongkrak rata-rata pembelian per pelanggan.`
-  }
-
-  if (normalized.includes('prediksi') || normalized.includes('ramalan') || normalized.includes('forecast')) {
-    return `### 🔮 Prediksi Penjualan Kopi Susu Gula Aren\n\n` +
-      `Menggunakan model perkiraan berdasarkan histori transaksi 7 hari terakhir:\n\n` +
-      `| Tanggal Prediksi | Ekspektasi Volume | Probabilitas | Rekomendasi Stok |\n` +
-      `| :--- | :---: | :---: | :---: |\n` +
-      `| Besok (Kamis) | **26 porsi** | Tinggi (92%) | Siapkan 30 porsi bahan baku |\n` +
-      `| Lusa (Jumat) | **32 porsi** | Sangat Tinggi (95%) | Siapkan 40 porsi bahan baku |\n` +
-      `| Sabtu | **38 porsi** | Sangat Tinggi (97%) | Siapkan 45 porsi bahan baku |\n\n` +
-      `⚠️ **Peringatan Operasional:**\n` +
-      `Sisa stok bahan baku kopi susu Anda saat ini hanya setara untuk **5 porsi** (di bawah batas minimal 10). Harap lakukan restock susu cair segar dan gula aren cair hari ini juga agar tidak kehabisan stok menjelang lonjakan akhir pekan.`
-  }
-
-  // Generic fallback
-  return `Halo! Saya adalah **Asisten AI WarungKu**. Saya dapat membantu Anda menganalisis performa bisnis dan persediaan barang secara cerdas.\n\n` +
-    `Coba ajukan beberapa pertanyaan analitis seperti:\n` +
-    `- *"Lakukan audit produk dengan stok menipis"* \n` +
-    `- *"Analisis performa penjualan hari ini"* \n` +
-    `- *"Prediksi penjualan kopi susu aren"*`
-}
-
-// ----------------------------------------------------
 // Session Actions
 // ----------------------------------------------------
 async function fetchSessions() {
   loadingSessions.value = true
-  if (isDemo.value) {
-    const raw = localStorage.getItem('warungku_ai_sessions')
-    if (raw) {
-      sessions.value = JSON.parse(raw)
-    } else {
-      const initial: Session[] = [
-        {
-          id: 'session-demo-1',
-          title: 'Audit Persediaan Sembako',
-          last_active_at: new Date().toISOString(),
-          created_at: new Date().toISOString()
-        },
-        {
-          id: 'session-demo-2',
-          title: 'Analisis Margin Penjualan',
-          last_active_at: new Date(Date.now() - 3600000).toISOString(),
-          created_at: new Date(Date.now() - 3600000).toISOString()
-        }
-      ]
-      localStorage.setItem('warungku_ai_sessions', JSON.stringify(initial))
-      sessions.value = initial
-    }
-
-    if (sessions.value.length > 0 && !activeSessionId.value) {
-      activeSessionId.value = sessions.value[0]?.id || null
-    }
-    loadingSessions.value = false
-    return
-  }
-
   if (!user.value) {
     loadingSessions.value = false
     return
@@ -255,20 +121,6 @@ async function fetchSessions() {
 
 async function createNewSession(customTitle?: string) {
   const newTitle = customTitle || `Analisis Baru #${sessions.value.length + 1}`
-
-  if (isDemo.value) {
-    const newSess: Session = {
-      id: `session-demo-${Date.now()}`,
-      title: newTitle,
-      last_active_at: new Date().toISOString(),
-      created_at: new Date().toISOString()
-    }
-    sessions.value = [newSess, ...sessions.value]
-    localStorage.setItem('warungku_ai_sessions', JSON.stringify(sessions.value))
-    activeSessionId.value = newSess.id
-    messages.value = []
-    return
-  }
 
   if (!user.value) return
 
@@ -312,21 +164,6 @@ function openRenameSession(sess: Session) {
 async function renameSession() {
   if (!renamingSession.value || !editSessionName.value.trim()) return
 
-  if (isDemo.value) {
-    const idx = sessions.value.findIndex(s => s.id === renamingSession.value!.id)
-    if (idx !== -1 && sessions.value[idx]) {
-      sessions.value[idx]!.title = editSessionName.value
-      localStorage.setItem('warungku_ai_sessions', JSON.stringify(sessions.value))
-      toast.add({
-        title: 'Sesi diubah nama',
-        color: 'success'
-      })
-    }
-    isRenameModalOpen.value = false
-    renamingSession.value = null
-    return
-  }
-
   try {
     const { error } = await (supabase as any)
       .from('ai_sessions')
@@ -356,28 +193,6 @@ async function renameSession() {
 }
 
 async function deleteSession(id: string) {
-  if (isDemo.value) {
-    sessions.value = sessions.value.filter(s => s.id !== id)
-    localStorage.setItem('warungku_ai_sessions', JSON.stringify(sessions.value))
-
-    // Clear local messages of that session
-    const localMsgsRaw = localStorage.getItem('warungku_ai_messages')
-    if (localMsgsRaw) {
-      const localMsgs = JSON.parse(localMsgsRaw)
-      delete localMsgs[id]
-      localStorage.setItem('warungku_ai_messages', JSON.stringify(localMsgs))
-    }
-
-    if (activeSessionId.value === id) {
-      activeSessionId.value = sessions.value.length > 0 ? (sessions.value[0]?.id || null) : null
-    }
-    toast.add({
-      title: 'Sesi dihapus',
-      color: 'success'
-    })
-    return
-  }
-
   try {
     const { error } = await (supabase as any)
       .from('ai_sessions')
@@ -410,30 +225,6 @@ async function fetchMessages(sessId: string) {
   loadingMessages.value = true
   streamingText.value = ''
   typingIndex.value = -1
-
-  if (isDemo.value) {
-    const localMsgsRaw = localStorage.getItem('warungku_ai_messages')
-    if (localMsgsRaw) {
-      const localMsgs = JSON.parse(localMsgsRaw)
-      messages.value = localMsgs[sessId] || []
-    } else {
-      // Seed some initial welcome message
-      const initial: Message[] = [
-        {
-          id: 'msg-demo-1',
-          query_text: 'Halo asisten!',
-          response_text: 'Halo! Saya adalah **Asisten AI WarungKu** yang siap membantu Anda memantau performa warung dan persediaan barang secara cerdas.\n\nPilih salah satu rekomendasi pintasan di bawah ini untuk segera mulai!',
-          query_type: 'analysis',
-          created_at: new Date().toISOString()
-        }
-      ]
-      const localDict = { [sessId]: initial }
-      localStorage.setItem('warungku_ai_messages', JSON.stringify(localDict))
-      messages.value = initial
-    }
-    loadingMessages.value = false
-    return
-  }
 
   try {
     const { data, error } = await (supabase as any)
@@ -490,7 +281,7 @@ watch(activeSessionId, (newVal) => {
 })
 
 // ----------------------------------------------------
-// Message Submit flow (Streaming Typewriter Engine)
+// Message Submit flow
 // ----------------------------------------------------
 async function sendMessage(customPrompt?: string, customType?: 'analysis' | 'recommendation' | 'forecast' | 'content_gen' | 'anomaly') {
   const finalPrompt = customPrompt || messageInput.value.trim()
@@ -520,62 +311,6 @@ async function sendMessage(customPrompt?: string, customType?: 'analysis' | 'rec
 
   // Auto-scroll chat area
   scrollToBottom()
-
-  // 2. Generate appropriate response
-  const fullResponseText = generateDemoResponse(finalPrompt, finalType)
-
-  if (isDemo.value) {
-    // Simulate thinking delay
-    await new Promise(resolve => setTimeout(resolve, 800))
-
-    // Streaming typewriter engine
-    typingIndex.value = messages.value.length - 1
-    let currentLen = 0
-    const step = 5 // characters per tick
-    const interval = setInterval(() => {
-      currentLen += step
-      streamingText.value = fullResponseText.substring(0, currentLen)
-      scrollToBottom()
-
-      if (currentLen >= fullResponseText.length) {
-        clearInterval(interval)
-
-        // Commit full message to localStorage
-        const finalMsg: Message = {
-          id: `msg-demo-${Date.now()}`,
-          query_text: finalPrompt,
-          response_text: fullResponseText,
-          query_type: finalType,
-          created_at: new Date().toISOString()
-        }
-
-        // Replace temp pending message with actual one
-        const tempIdx = messages.value.findIndex(m => m.id === userMsgId)
-        if (tempIdx !== -1) {
-          messages.value[tempIdx] = finalMsg
-        }
-
-        // Save session history locally
-        const localMsgsRaw = localStorage.getItem('warungku_ai_messages')
-        const localDict = localMsgsRaw ? JSON.parse(localMsgsRaw) : {}
-        localDict[currentSessId] = messages.value
-        localStorage.setItem('warungku_ai_messages', JSON.stringify(localDict))
-
-        // Update session's last active at
-        const sessIdx = sessions.value.findIndex(s => s.id === currentSessId)
-        if (sessIdx !== -1 && sessions.value[sessIdx]) {
-          sessions.value[sessIdx]!.last_active_at = new Date().toISOString()
-          localStorage.setItem('warungku_ai_sessions', JSON.stringify(sessions.value))
-        }
-
-        streamingText.value = ''
-        typingIndex.value = -1
-        sendingMessage.value = false
-        scrollToBottom()
-      }
-    }, 20)
-    return
-  }
 
   // Live mode connectivity
   if (!user.value) return
@@ -634,22 +369,6 @@ async function retryMessage(failedMsg: Message) {
 // Feedback & Ratings
 // ----------------------------------------------------
 async function rateResponse(message: Message, rating: 'helpful' | 'not_helpful') {
-  if (isDemo.value) {
-    message.rating = rating
-    // Save to local storage dictionary
-    const localMsgsRaw = localStorage.getItem('warungku_ai_messages')
-    if (localMsgsRaw && activeSessionId.value) {
-      const localDict = JSON.parse(localMsgsRaw)
-      localDict[activeSessionId.value] = messages.value
-      localStorage.setItem('warungku_ai_messages', JSON.stringify(localDict))
-    }
-    toast.add({
-      title: 'Terima kasih atas tanggapan Anda!',
-      color: 'success'
-    })
-    return
-  }
-
   try {
     // Insert/upsert feedback table
     const { error } = await (supabase as any)
@@ -782,19 +501,12 @@ onMounted(() => {
                   {{ activeSession.title }}
                 </span>
               </h1>
-              <p class="text-xs text-toned tracking-tight">Grounded in actual shop status • Demo Mode Fallbacks active</p>
+              <p class="text-xs text-toned tracking-tight">Grounded in actual shop status • Real-time vector search</p>
             </div>
           </div>
 
           <div class="flex items-center gap-2">
             <span
-              v-if="isDemo"
-              class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 uppercase tracking-widest border border-amber-500/20"
-            >
-              Demo Mode
-            </span>
-            <span
-              v-else
               class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-success/10 text-success uppercase tracking-widest border border-success/20"
             >
               Live Sync

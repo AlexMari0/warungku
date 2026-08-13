@@ -9,179 +9,6 @@ const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 const toast = useToast()
 
-const { isDemo } = useDemoMode()
-
-// POS states
-const products = ref<any[]>([])
-const categories = ref<any[]>([])
-const customers = ref<any[]>([])
-const loading = ref(false)
-
-// Search & Catalog Filter states
-const searchQuery = ref('')
-const selectedCategory = ref<string>('all')
-
-// Cart state
-interface CartItem {
-  id: string
-  product_id: string
-  name: string
-  sku: string | null
-  buy_price: number
-  unit_price: number
-  quantity: number
-  unit: string
-  discount: number
-  subtotal: number
-  max_stock: number
-}
-const cart = ref<CartItem[]>([])
-
-// Customer & Transaction details
-const selectedCustomerId = ref<string>('general')
-const orderNotes = ref('')
-const discountType = ref<'rp' | 'percent'>('rp')
-const discountValue = ref<number>(0)
-const viewMode = ref<'grid' | 'list'>('grid')
-const salesFrequency = ref<Record<string, number>>({})
-
-const discountAmount = computed(() => {
-  if (discountType.value === 'percent') {
-    const pct = Math.max(0, Math.min(100, Number(discountValue.value) || 0))
-    return Math.round((cartSubtotal.value * pct) / 100)
-  }
-  return Math.max(0, Number(discountValue.value) || 0)
-})
-
-const bestSellers = computed(() => {
-  return products.value
-    .filter(p => p.is_active && p.stock_qty > 0)
-    .map(p => ({
-      ...p,
-      salesCount: salesFrequency.value[p.id] || 0
-    }))
-    .filter(p => p.salesCount > 0)
-    .sort((a, b) => b.salesCount - a.salesCount)
-    .slice(0, 3)
-})
-
-type PaymentMethod = 'cash' | 'qris' | 'gopay' | 'ovo' | 'dana' | 'transfer'
-const paymentMethod = ref<PaymentMethod>('cash')
-const amountPaid = ref<number | null>(null)
-
-// Modal states
-const isAddCustomerOpen = ref(false)
-const isReceiptOpen = ref(false)
-const processingCheckout = ref(false)
-
-// Completed transaction reference to show in receipt
-const completedOrder = ref<any | null>(null)
-
-// Pre-seeded Demo customers if local storage is empty
-const defaultDemoCustomers = [
-  { id: 'cust-1', merchant_id: 'demo-merchant-id', name: 'Rian Anggara', phone: '8123456789', total_debt: 0, loyalty_points: 120, created_at: new Date().toISOString() },
-  { id: 'cust-2', merchant_id: 'demo-merchant-id', name: 'Siti Rahma', phone: '8778888999', total_debt: 15000, loyalty_points: 45, created_at: new Date().toISOString() },
-  { id: 'cust-3', merchant_id: 'demo-merchant-id', name: 'Pelanggan Umum', phone: '', total_debt: 0, loyalty_points: 0, created_at: new Date().toISOString() }
-]
-
-const defaultDemoCategories = [
-  { id: 'cat-1', name: 'Makanan', color: '#10b981', sort_order: 1, created_at: new Date().toISOString() },
-  { id: 'cat-2', name: 'Minuman', color: '#0284c7', sort_order: 2, created_at: new Date().toISOString() },
-  { id: 'cat-3', name: 'Rokok & Tembakau', color: '#f43f5e', sort_order: 3, created_at: new Date().toISOString() }
-]
-
-const defaultDemoProducts = [
-  {
-    id: 'prod-1',
-    merchant_id: 'demo-merchant-id',
-    category_id: 'cat-1',
-    name: 'Indomie Goreng Aceh',
-    sku: 'IND-GOR-ACH',
-    barcode: '8998888111222',
-    buy_price: 2500,
-    sell_price: 3500,
-    stock_qty: 40,
-    min_stock: 10,
-    unit: 'pcs',
-    image_url: 'https://images.unsplash.com/photo-1612927601601-6638404737ce?w=500&auto=format&fit=crop',
-    is_active: true,
-    created_at: new Date().toISOString(),
-    categories: { name: 'Makanan', color: '#10b981' }
-  },
-  {
-    id: 'prod-2',
-    merchant_id: 'demo-merchant-id',
-    category_id: 'cat-2',
-    name: 'Kopi Susu Gula Aren',
-    sku: 'KOPI-AREN-01',
-    barcode: '8997777111333',
-    buy_price: 8000,
-    sell_price: 12000,
-    stock_qty: 5,
-    min_stock: 10,
-    unit: 'porsi',
-    image_url: 'https://images.unsplash.com/photo-1541167760496-1628856ab772?w=500&auto=format&fit=crop',
-    is_active: true,
-    created_at: new Date().toISOString(),
-    categories: { name: 'Minuman', color: '#0284c7' }
-  }
-]
-
-const defaultDemoOrders = [
-  {
-    id: 'order-demo-1',
-    merchant_id: 'demo-merchant-id',
-    customer_id: 'cust-1',
-    order_number: 'WK-20260520-0001',
-    status: 'paid',
-    subtotal: 19000,
-    discount_amount: 0,
-    total_amount: 19000,
-    notes: 'Pembelian rutin pagi',
-    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-    items: [
-      { product_id: 'prod-1', quantity: 2, unit_price: 3500, discount: 0, subtotal: 7000 },
-      { product_id: 'prod-2', quantity: 1, unit_price: 12000, discount: 0, subtotal: 12000 }
-    ]
-  },
-  {
-    id: 'order-demo-2',
-    merchant_id: 'demo-merchant-id',
-    customer_id: 'cust-2',
-    order_number: 'WK-20260520-0002',
-    status: 'paid',
-    subtotal: 10500,
-    discount_amount: 0,
-    total_amount: 10500,
-    notes: null,
-    created_at: new Date(Date.now() - 3600000 * 5).toISOString(),
-    items: [
-      { product_id: 'prod-1', quantity: 3, unit_price: 3500, discount: 0, subtotal: 10500 }
-    ]
-  }
-]
-
-function readDemoList<T>(key: string, fallback: T[]): T[] {
-  try {
-    const raw = localStorage.getItem(key)
-    const parsed = raw ? JSON.parse(raw) : []
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed as T[]
-    }
-  } catch {}
-  return JSON.parse(JSON.stringify(fallback))
-}
-
-function writeDemoList<T>(key: string, value: T[]) {
-  try {
-    let finalValue = value
-    if (key === 'warungku_movements' && value.length > 100) {
-      finalValue = value.slice(0, 100)
-    }
-    localStorage.setItem(key, JSON.stringify(finalValue))
-  } catch {}
-}
-
 // Payment Method visual metadata
 const paymentMeta = {
   cash: { label: 'Tunai', icon: 'i-lucide-banknote', color: 'success' },
@@ -192,40 +19,71 @@ const paymentMeta = {
   transfer: { label: 'Transfer', icon: 'i-lucide-send', color: 'warning' }
 }
 
+interface CartItem {
+  id?: string
+  product_id: string
+  name: string
+  sku?: string
+  price: number
+  unit_price: number
+  cost_price: number
+  buy_price?: number
+  quantity: number
+  unit: string
+  max_stock: number
+  image_url?: string
+  subtotal: number
+  discount: number
+}
+
+// POS State
+const loading = ref(true)
+const viewMode = ref<'grid' | 'list'>('grid')
+const categories = ref<any[]>([])
+const products = ref<any[]>([])
+const customers = ref<any[]>([])
+const salesFrequency = ref<Record<string, number>>({})
+
+const selectedCategory = ref<string>('all')
+const searchQuery = ref('')
+const selectedCustomerId = ref<string | null>('general')
+const orderNotes = ref('')
+
+const cart = ref<CartItem[]>([])
+const discountType = ref<'rp' | 'percent'>('rp')
+const discountValue = ref<number>(0)
+const paymentMethod = ref<'cash' | 'qris' | 'gopay' | 'ovo' | 'dana' | 'transfer'>('cash')
+const amountPaid = ref<number | null>(null)
+
+const processingCheckout = ref(false)
+const isAddCustomerOpen = ref(false)
+const isReceiptOpen = ref(false)
+const completedOrder = ref<any>(null)
+
+const bestSellers = computed(() => {
+  return [...products.value]
+    .sort((a, b) => (salesFrequency.value[b.id] || 0) - (salesFrequency.value[a.id] || 0))
+    .slice(0, 4)
+})
+
+const cartSubtotal = computed(() => {
+  return cart.value.reduce((acc, item) => acc + item.subtotal, 0)
+})
+
+const discountAmount = computed(() => {
+  if (discountType.value === 'percent') {
+    return Math.round((cartSubtotal.value * (discountValue.value || 0)) / 100)
+  }
+  return discountValue.value || 0
+})
+
 // 1. Fetch initial POS context
 async function fetchPOSContext() {
-  loading.value = true
-  if (isDemo.value) {
-    categories.value = readDemoList('warungku_categories', defaultDemoCategories)
-    products.value = readDemoList('warungku_products', defaultDemoProducts)
-    customers.value = readDemoList('warungku_customers', defaultDemoCustomers)
-
-    writeDemoList('warungku_categories', categories.value)
-    writeDemoList('warungku_products', products.value)
-    writeDemoList('warungku_customers', customers.value)
-
-    // Compute sales frequency from local storage orders
-    const demoOrders = readDemoList<any>('warungku_orders', defaultDemoOrders)
-    writeDemoList('warungku_orders', demoOrders)
-    const freq: Record<string, number> = {}
-    for (const order of demoOrders) {
-      if (Array.isArray(order.items)) {
-        for (const item of order.items) {
-          freq[item.product_id] = (freq[item.product_id] || 0) + (item.quantity || 0)
-        }
-      }
-    }
-    salesFrequency.value = freq
-
-    loading.value = false
-    return
-  }
-
-  // Live Supabase Mode
   if (!user.value) {
     loading.value = false
     return
   }
+  loading.value = true
   try {
     const { data: catData } = await supabase.from('categories').select('*').order('sort_order', { ascending: true })
     const { data: prodData } = await supabase.from('products').select('*, categories(name, color)').eq('is_active', true).order('created_at', { ascending: false })
@@ -285,6 +143,8 @@ function addToCart(product: any) {
       product_id: product.id,
       name: product.name,
       sku: product.sku || null,
+      price: Number(product.sell_price) || 0,
+      cost_price: Number(product.buy_price) || 0,
       buy_price: Number(product.buy_price) || 0,
       unit_price: Number(product.sell_price) || 0,
       quantity: 1,
@@ -331,10 +191,6 @@ function removeFromCart(item: CartItem) {
 }
 
 // 4. Cart calculations
-const cartSubtotal = computed(() => {
-  return cart.value.reduce((acc, item) => acc + item.subtotal, 0)
-})
-
 const cartTotal = computed(() => {
   const sum = cartSubtotal.value - discountAmount.value
   return sum < 0 ? 0 : sum
@@ -405,140 +261,7 @@ async function handleCheckout() {
 
   processingCheckout.value = true
 
-  if (isDemo.value) {
-    // A. DEMO LURING CHECKOUT IN LOCAL STORAGE
-    try {
-      const orderId = `order-${Date.now()}`
-      const orderNumber = `WK-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Date.now().toString().slice(-4)}`
-
-      const activeCustomer = selectedCustomerId.value !== 'general'
-        ? customers.value.find(c => c.id === selectedCustomerId.value) || null
-        : null
-
-      // Decrement product stocks reactively
-      let localProducts = readDemoList('warungku_products', products.value.length ? products.value : defaultDemoProducts)
-      const localMovements = readDemoList<any>('warungku_movements', [])
-
-      const orderItemsList = cart.value.map((item) => {
-        // Find and decrease stock
-        localProducts = localProducts.map((p: any) => {
-          if (p.id === item.product_id) {
-            const newStock = Math.max(0, p.stock_qty - item.quantity)
-
-            // Log stock movement audit entry
-            localMovements.unshift({
-              id: `mov-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-              merchant_id: 'demo-merchant-id',
-              product_id: p.id,
-              type: 'sale',
-              quantity: -item.quantity,
-              qty_before: p.stock_qty,
-              qty_after: newStock,
-              unit_cost: p.buy_price,
-              notes: `Penjualan Kasir POS #${orderNumber}`,
-              created_at: new Date().toISOString(),
-              products: { name: p.name, sku: p.sku, unit: p.unit }
-            })
-
-            return { ...p, stock_qty: newStock }
-          }
-          return p
-        })
-
-        return {
-          id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-          order_id: orderId,
-          product_id: item.product_id,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          discount: item.discount,
-          subtotal: item.subtotal,
-          product: { name: item.name, unit: item.unit }
-        }
-      })
-
-      // Update customer loyalty points (1 point per Rp 10.000 spent)
-      if (selectedCustomerId.value !== 'general') {
-        let localCusts = readDemoList('warungku_customers', customers.value)
-        const pointsEarned = Math.floor(finalTotal / 10000)
-
-        localCusts = localCusts.map((c: any) => {
-          if (c.id === selectedCustomerId.value) {
-            return { ...c, loyalty_points: c.loyalty_points + pointsEarned }
-          }
-          return c
-        })
-
-        writeDemoList('warungku_customers', localCusts)
-        customers.value = localCusts
-      }
-
-      const orderPayload = {
-        id: orderId,
-        merchant_id: 'demo-merchant-id',
-        customer_id: selectedCustomerId.value !== 'general' ? selectedCustomerId.value : null,
-        order_number: orderNumber,
-        status: 'paid',
-        subtotal: cartSubtotal.value,
-        discount_amount: discountAmount.value,
-        total_amount: finalTotal,
-        notes: orderNotes.value || null,
-        created_at: new Date().toISOString(),
-        items: orderItemsList
-      }
-
-      // Save transactions
-      const ordersList = readDemoList<any>('warungku_orders', defaultDemoOrders)
-      ordersList.unshift(orderPayload)
-      writeDemoList('warungku_orders', ordersList)
-      writeDemoList('warungku_products', localProducts)
-      writeDemoList('warungku_movements', localMovements)
-
-      const demoPayment = {
-        id: `pay-${Date.now()}`,
-        order_id: orderId,
-        method: paymentMethod.value,
-        amount: payAmount,
-        change_amount: paymentMethod.value === 'cash' ? changeAmount.value : 0,
-        status: 'completed',
-        paid_at: new Date().toISOString()
-      }
-
-      // Set completed order object to pass to the receipt
-      completedOrder.value = {
-        ...orderPayload,
-        items: orderItemsList,
-        payment: demoPayment,
-        customer: activeCustomer
-      }
-
-      // Proactively update sales frequency in memory for instant best sellers re-ranking
-      for (const item of cart.value) {
-        salesFrequency.value[item.product_id] = (salesFrequency.value[item.product_id] || 0) + item.quantity
-      }
-
-      toast.add({
-        title: 'Checkout Berhasil',
-        description: 'Transaksi tercatat dan stok disesuaikan (Mode Demo).',
-        color: 'success'
-      })
-
-      // Sync local list
-      products.value = localProducts
-      isReceiptOpen.value = true
-    } catch (err: any) {
-      toast.add({
-        title: 'Checkout Gagal',
-        description: err.message,
-        color: 'error'
-      })
-    } finally {
-      processingCheckout.value = false
-    }
-    return
-  }
-
-  // B. SUPABASE ATOMIC TRANSACTION CHECKOUT
+  // SUPABASE ATOMIC TRANSACTION CHECKOUT
   if (!user.value) return
   try {
     const itemsPayload = cart.value.map(item => ({

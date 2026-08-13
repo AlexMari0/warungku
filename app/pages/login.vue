@@ -59,18 +59,6 @@ async function onSubmit(payload: FormSubmitEvent<Schema>) {
     loading.value = false
   }
 }
-
-const { enableDemo } = useDemoMode()
-
-async function startDemo() {
-  enableDemo()
-  toast.add({
-    title: '🚀 Mode Demo Aktif!',
-    description: 'Anda masuk sebagai merchant demo secara luring.',
-    color: 'primary'
-  })
-  await navigateTo('/stock')
-}
 </script>
 
 <template>
@@ -98,24 +86,5 @@ async function startDemo() {
         >Daftar sekarang</ULink>
       </template>
     </UAuthForm>
-
-    <div class="mt-5 flex flex-col gap-3">
-      <div class="flex items-center justify-between text-xs text-muted-foreground/60">
-        <span class="w-full h-px bg-muted" />
-        <span class="px-3 shrink-0 font-bold uppercase tracking-wider text-[10px]">Atau</span>
-        <span class="w-full h-px bg-muted" />
-      </div>
-
-      <UButton
-        icon="i-lucide-sparkles"
-        color="primary"
-        variant="subtle"
-        label="Coba Mode Demo (Luring)"
-        block
-        size="md"
-        class="rounded-xl shadow-sm border border-primary/20 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer"
-        @click="startDemo"
-      />
-    </div>
   </div>
 </template>

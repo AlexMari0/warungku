@@ -54,28 +54,8 @@ const state = reactive<Partial<Schema>>({
   sort_order: 0
 })
 
-const { isDemo } = useDemoMode()
-
 // Fetch all categories for the active merchant
 async function fetchCategories() {
-  if (isDemo.value) {
-    loading.value = true
-    const raw = localStorage.getItem('warungku_categories')
-    if (raw) {
-      categories.value = JSON.parse(raw)
-    } else {
-      const initial = [
-        { id: 'cat-1', name: 'Makanan', color: '#10b981', sort_order: 1, created_at: new Date().toISOString() },
-        { id: 'cat-2', name: 'Minuman', color: '#0284c7', sort_order: 2, created_at: new Date().toISOString() },
-        { id: 'cat-3', name: 'Rokok & Tembakau', color: '# Rose'.replace(' ', '').replace('Rose', '#f43f5e'), sort_order: 3, created_at: new Date().toISOString() } // Keep rose preset
-      ]
-      localStorage.setItem('warungku_categories', JSON.stringify(initial))
-      categories.value = initial
-    }
-    loading.value = false
-    return
-  }
-
   if (!user.value) return
   loading.value = true
   try {
@@ -116,42 +96,6 @@ function startEdit(category: any) {
 
 // Create or update a category
 async function onSubmit(event: FormSubmitEvent<Schema>) {
-  if (isDemo.value) {
-    submittings.value = true
-    const payload = {
-      id: editingCategory.value?.id || `cat-${Date.now()}`,
-      merchant_id: 'demo-merchant-id',
-      name: event.data.name,
-      color: event.data.color,
-      sort_order: event.data.sort_order,
-      created_at: editingCategory.value?.created_at || new Date().toISOString()
-    }
-
-    let list = [...categories.value]
-    if (editingCategory.value) {
-      list = list.map(c => c.id === payload.id ? payload : c)
-      toast.add({
-        title: 'Kategori diperbarui',
-        description: `Kategori "${payload.name}" berhasil disimpan (Mode Demo).`,
-        color: 'success'
-      })
-    } else {
-      list.push(payload)
-      toast.add({
-        title: 'Kategori dibuat',
-        description: `Kategori "${payload.name}" berhasil ditambahkan (Mode Demo).`,
-        color: 'success'
-      })
-    }
-
-    localStorage.setItem('warungku_categories', JSON.stringify(list))
-    categories.value = list
-    resetForm()
-    emit('saved')
-    submittings.value = false
-    return
-  }
-
   if (!user.value) return
   submittings.value = true
 
@@ -219,24 +163,6 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
 // Delete a category
 async function deleteCategory(id: string, name: string) {
   if (!confirm(`Apakah Anda yakin ingin menghapus kategori "${name}"? Produk yang terkait dengan kategori ini akan diset tanpa kategori.`)) {
-    return
-  }
-
-  if (isDemo.value) {
-    loading.value = true
-    const list = categories.value.filter(c => c.id !== id)
-    localStorage.setItem('warungku_categories', JSON.stringify(list))
-    categories.value = list
-    toast.add({
-      title: 'Kategori dihapus',
-      description: `Kategori "${name}" berhasil dihapus (Mode Demo).`,
-      color: 'success'
-    })
-    if (editingCategory.value?.id === id) {
-      resetForm()
-    }
-    loading.value = false
-    emit('saved')
     return
   }
 

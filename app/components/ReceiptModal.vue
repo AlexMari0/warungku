@@ -15,7 +15,6 @@ const isOpen = computed({
 })
 
 const toast = useToast()
-const { isDemo } = useDemoMode()
 
 function formatRupiah(amount: number) {
   if (!amount && amount !== 0) return '-'

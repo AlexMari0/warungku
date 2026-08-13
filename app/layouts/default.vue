@@ -7,18 +7,7 @@ const colorMode = useColorMode()
 
 const isSidebarExpanded = ref(true)
 
-const { isDemo, disableDemo } = useDemoMode()
-
 const displayUser = computed<any>(() => {
-  if (isDemo.value) {
-    return {
-      email: 'demo@warungku.com',
-      user_metadata: {
-        avatar_url: null,
-        name: 'Demo Merchant'
-      }
-    }
-  }
   return user.value
 })
 
@@ -42,11 +31,7 @@ const userItems = computed(() => [
     icon: 'i-lucide-log-out',
     color: 'error' as const,
     onClick: async () => {
-      if (isDemo.value) {
-        disableDemo()
-      } else {
-        await supabase.auth.signOut()
-      }
+      await supabase.auth.signOut()
       toast.add({
         title: 'Berhasil keluar',
         description: 'Sampai jumpa lagi di WarungKu!',
@@ -348,12 +333,7 @@ const reportsMenuItems = [
             class="flex items-center gap-3 py-2 rounded-xl text-sm font-medium transition-all duration-300 group cursor-pointer text-error/80 hover:bg-error/10 hover:text-error w-full mt-1"
             :class="[!isSidebarExpanded ? 'justify-center px-0' : 'px-3']"
             @click="async () => {
-              if (isDemo) {
-                disableDemo()
-              }
-              else {
-                await supabase.auth.signOut()
-              }
+              await supabase.auth.signOut()
               toast.add({
                 title: 'Berhasil keluar',
                 description: 'Sampai jumpa lagi!',

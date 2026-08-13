@@ -9,8 +9,6 @@ const activeTab = ref<'storefront' | 'profile' | 'developer'>('storefront')
 const loading = ref(false)
 const saving = ref(false)
 
-const { isDemo } = useDemoMode()
-
 // Storefront settings state
 const storefront = ref({
   id: '',
@@ -82,37 +80,24 @@ watch(() => storefront.value.slug, (newSlug) => {
   slugCheckTimeout = setTimeout(async () => {
     try {
       const checkSlug = newSlug.trim().toLowerCase()
+      if (!user.value) return
       
-      if (isDemo.value) {
-        // Simulate checking in Demo Mode
-        const takenSlugs = ['budi', 'toko-taken', 'warung-taken']
-        if (takenSlugs.includes(checkSlug)) {
-          slugStatus.value = 'taken'
-          slugErrorMessage.value = `Alamat /store/${checkSlug} sudah digunakan oleh warung lain.`
-        } else {
-          slugStatus.value = 'available'
-          slugErrorMessage.value = ''
-        }
+      // Query to check if the slug is taken by someone else
+      const { data, error } = await supabase
+        .from('storefronts')
+        .select('id')
+        .eq('slug', checkSlug)
+        .neq('merchant_id', user.value.id)
+        .maybeSingle()
+        
+      if (error) throw error
+      
+      if (data) {
+        slugStatus.value = 'taken'
+        slugErrorMessage.value = `Alamat /store/${checkSlug} sudah digunakan oleh warung lain.`
       } else {
-        if (!user.value) return
-        
-        // Query to check if the slug is taken by someone else
-        const { data, error } = await supabase
-          .from('storefronts')
-          .select('id')
-          .eq('slug', checkSlug)
-          .neq('merchant_id', user.value.id)
-          .maybeSingle()
-          
-        if (error) throw error
-        
-        if (data) {
-          slugStatus.value = 'taken'
-          slugErrorMessage.value = `Alamat /store/${checkSlug} sudah digunakan oleh warung lain.`
-        } else {
-          slugStatus.value = 'available'
-          slugErrorMessage.value = ''
-        }
+        slugStatus.value = 'available'
+        slugErrorMessage.value = ''
       }
     } catch (err: any) {
       slugStatus.value = 'invalid'
@@ -155,125 +140,72 @@ const formatRupiah = (val: number) => {
 async function fetchData() {
   loading.value = true
   try {
-    if (isDemo.value) {
-      // 1. Load storefront settings
-      const rawSf = localStorage.getItem('warungku_storefront')
-      if (rawSf) {
-        storefront.value = JSON.parse(rawSf)
-      } else {
-        const defaultSf = {
-          id: 'sf-demo-1',
-          slug: 'warung-demo-kita',
-          display_name: 'Warung Demo Kita',
-          description: 'Penyedia bahan harian terlengkap, hemat biaya, dan terpercaya bagi masyarakat luas.',
-          banner_url: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=800&auto=format&fit=crop&q=80',
-          theme_color: 'emerald',
-          is_published: true
-        }
-        localStorage.setItem('warungku_storefront', JSON.stringify(defaultSf))
-        storefront.value = defaultSf
+    if (!user.value) return
+
+    // 1. Fetch categories & products
+    const { data: catData } = await supabase.from('categories').select('*').order('sort_order', { ascending: true })
+    categories.value = catData || []
+
+    const { data: prodData } = await supabase.from('products').select('*, categories(name, color)').order('name', { ascending: true })
+    products.value = prodData || []
+
+    // 2. Fetch storefront setting for merchant
+    const { data: sfData, error: sfError } = await (supabase
+      .from('storefronts') as any)
+      .select('*')
+      .eq('merchant_id', user.value.id)
+      .maybeSingle()
+
+    if (sfError) throw sfError
+
+    let activeSf = sfData
+    if (!activeSf) {
+      // Create an initial default storefront configuration
+      const namePart = user.value.email?.split('@')[0] || 'toko-saya'
+      const initialSf = {
+        merchant_id: user.value.id,
+        slug: `${namePart.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Math.floor(100 + Math.random() * 900)}`,
+        display_name: 'Toko Baru Saya',
+        description: 'Selamat datang di toko online resmi kami!',
+        theme_color: 'emerald',
+        banner_url: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=800&auto=format&fit=crop&q=80',
+        is_published: false
       }
 
-      // 2. Load inventory categories and products
-      const rawCats = localStorage.getItem('warungku_categories')
-      categories.value = rawCats ? JSON.parse(rawCats) : []
-
-      const rawProds = localStorage.getItem('warungku_products')
-      products.value = rawProds ? JSON.parse(rawProds) : []
-
-      // 3. Load storefront product linkages
-      const rawSfp = localStorage.getItem('warungku_storefront_products')
-      let linkedList: any[] = []
-      if (rawSfp) {
-        linkedList = JSON.parse(rawSfp)
-      } else {
-        linkedList = [
-          { product_id: 'prod-1', is_featured: true, custom_description: 'Indomie Aceh pedas rempah mantap' },
-          { product_id: 'prod-2', is_featured: false, custom_description: 'Kopi susu gula aren segar' }
-        ]
-        localStorage.setItem('warungku_storefront_products', JSON.stringify(linkedList))
-      }
-
-      // Initialize map
-      const map: Record<string, any> = {}
-      products.value.forEach(p => {
-        const found = linkedList.find((link: any) => link.product_id === p.id)
-        map[p.id] = {
-          is_linked: !!found,
-          is_featured: found ? found.is_featured : false,
-          custom_description: found ? found.custom_description || '' : ''
-        }
-      })
-      storefrontProductsMap.value = map
-
-    } else {
-      if (!user.value) return
-
-      // 1. Fetch categories & products
-      const { data: catData } = await supabase.from('categories').select('*').order('sort_order', { ascending: true })
-      categories.value = catData || []
-
-      const { data: prodData } = await supabase.from('products').select('*, categories(name, color)').order('name', { ascending: true })
-      products.value = prodData || []
-
-      // 2. Fetch storefront setting for merchant
-      const { data: sfData, error: sfError } = await (supabase
+      const { data: newSf, error: createError } = await (supabase
         .from('storefronts') as any)
-        .select('*')
-        .eq('merchant_id', user.value.id)
-        .maybeSingle()
+        .insert(initialSf)
+        .select()
+        .single()
 
-      if (sfError) throw sfError
-
-      let activeSf = sfData
-      if (!activeSf) {
-        // Create an initial default storefront configuration
-        const namePart = user.value.email?.split('@')[0] || 'toko-saya'
-        const initialSf = {
-          merchant_id: user.value.id,
-          slug: `${namePart.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Math.floor(100 + Math.random() * 900)}`,
-          display_name: 'Toko Baru Saya',
-          description: 'Selamat datang di toko online resmi kami!',
-          theme_color: 'emerald',
-          banner_url: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=800&auto=format&fit=crop&q=80',
-          is_published: false
-        }
-
-        const { data: newSf, error: createError } = await (supabase
-          .from('storefronts') as any)
-          .insert(initialSf)
-          .select()
-          .single()
-
-        if (createError) throw createError
-        activeSf = newSf
-      }
-
-      if (!activeSf) {
-        throw new Error('Gagal memuat atau membuat etalase toko.')
-      }
-
-      storefront.value = activeSf
-
-      // 3. Fetch linked storefront products
-      const { data: sfpData, error: sfpError } = await (supabase
-        .from('storefront_products') as any)
-        .select('*')
-        .eq('storefront_id', (activeSf as any).id)
-
-      if (sfpError) throw sfpError
-
-      const map: Record<string, any> = {}
-      products.value.forEach(p => {
-        const found = ((sfpData as any) || []).find((link: any) => link.product_id === p.id)
-        map[p.id] = {
-          is_linked: !!found,
-          is_featured: found ? found.is_featured : false,
-          custom_description: found ? found.custom_description || '' : ''
-        }
-      })
-      storefrontProductsMap.value = map
+      if (createError) throw createError
+      activeSf = newSf
     }
+
+    if (!activeSf) {
+      throw new Error('Gagal memuat atau membuat etalase toko.')
+    }
+
+    storefront.value = activeSf
+
+    // 3. Fetch linked storefront products
+    const { data: sfpData, error: sfpError } = await (supabase
+      .from('storefront_products') as any)
+      .select('*')
+      .eq('storefront_id', (activeSf as any).id)
+
+    if (sfpError) throw sfpError
+
+    const map: Record<string, any> = {}
+    products.value.forEach(p => {
+      const found = ((sfpData as any) || []).find((link: any) => link.product_id === p.id)
+      map[p.id] = {
+        is_linked: !!found,
+        is_featured: found ? found.is_featured : false,
+        custom_description: found ? found.custom_description || '' : ''
+      }
+    })
+    storefrontProductsMap.value = map
   } catch (err: any) {
     toast.add({
       title: 'Gagal memuat data',
@@ -296,34 +228,7 @@ async function saveSettings() {
     }
     storefront.value.slug = cleanSlug
 
-    if (isDemo.value) {
-      // 1. Save storefront config
-      localStorage.setItem('warungku_storefront', JSON.stringify(storefront.value))
-
-      // 2. Compile and save linked products list
-      const linkedList: any[] = []
-      Object.keys(storefrontProductsMap.value).forEach(pId => {
-        const item = storefrontProductsMap.value[pId]
-        if (item && item.is_linked) {
-          linkedList.push({
-            id: `sfp-mock-${pId}`,
-            storefront_id: storefront.value.id,
-            product_id: pId,
-            is_featured: item.is_featured,
-            custom_description: item.custom_description,
-            sort_order: 0
-          })
-        }
-      })
-      localStorage.setItem('warungku_storefront_products', JSON.stringify(linkedList))
-
-      toast.add({
-        title: 'Berhasil menyimpan (Demo)',
-        description: 'Konfigurasi toko online telah disimpan ke browser.',
-        color: 'success'
-      })
-    } else {
-      if (!user.value) return
+    if (!user.value) return
 
       // 1. Update storefront parameters
       const { error: sfError } = await (supabase
@@ -376,10 +281,9 @@ async function saveSettings() {
         description: 'Etalase online Anda telah berhasil dipublikasikan!',
         color: 'success'
       })
-    }
 
-    // Refresh storefront maps and items
-    await fetchData()
+      // Refresh storefront maps and items
+      await fetchData()
   } catch (err: any) {
     toast.add({
       title: 'Gagal menyimpan',
@@ -453,305 +357,6 @@ const themeColorList = [
 ]
 
 const mockupDarkMode = ref(false)
-
-const seeding = ref(false)
-const clearing = ref(false)
-
-async function seedDemoData() {
-  seeding.value = true
-  try {
-    // 1. Categories
-    const categoriesList = [
-      { id: 'cat-demo-1', name: 'Sembako', color: '#10b981', sort_order: 1 },
-      { id: 'cat-demo-2', name: 'Minuman', color: '#0284c7', sort_order: 2 },
-      { id: 'cat-demo-3', name: 'Makanan Ringan', color: '#f59e0b', sort_order: 3 },
-      { id: 'cat-demo-4', name: 'Rokok', color: '#ef4444', sort_order: 4 }
-    ]
-
-    // 2. Products
-    const productsList = [
-      { id: 'prod-demo-1', category_id: 'cat-demo-1', name: 'Beras Sentra Ramos 5kg', sku: 'SEM-BRS-RAM', buy_price: 68000, sell_price: 75000, stock_qty: 85, min_stock: 5, unit: 'karung', is_active: true, categories: { name: 'Sembako', color: '#10b981' } },
-      { id: 'prod-demo-2', category_id: 'cat-demo-1', name: 'Minyak Goreng Bimoli 2L', sku: 'SEM-MYK-BIM', buy_price: 32000, sell_price: 36500, stock_qty: 100, min_stock: 8, unit: 'pouch', is_active: true, categories: { name: 'Sembako', color: '#10b981' } },
-      { id: 'prod-demo-3', category_id: 'cat-demo-1', name: 'Gula Pasir Gulaku 1kg', sku: 'SEM-GLA-GUL', buy_price: 14500, sell_price: 17000, stock_qty: 110, min_stock: 10, unit: 'pcs', is_active: true, categories: { name: 'Sembako', color: '#10b981' } },
-      { id: 'prod-demo-4', category_id: 'cat-demo-2', name: 'Aqua 600ml', sku: 'MIN-AQA-600', buy_price: 2500, sell_price: 3500, stock_qty: 240, min_stock: 24, unit: 'botol', is_active: true, categories: { name: 'Minuman', color: '#0284c7' } },
-      { id: 'prod-demo-5', category_id: 'cat-demo-2', name: 'Teh Botol Sosro 350ml', sku: 'MIN-TBS-350', buy_price: 3000, sell_price: 4500, stock_qty: 180, min_stock: 12, unit: 'botol', is_active: true, categories: { name: 'Minuman', color: '#0284c7' } },
-      { id: 'prod-demo-6', category_id: 'cat-demo-2', name: 'Kopi Kapal Api Sachet', sku: 'MIN-KAP-SCT', buy_price: 1200, sell_price: 2000, stock_qty: 300, min_stock: 30, unit: 'pcs', is_active: true, categories: { name: 'Minuman', color: '#0284c7' } },
-      { id: 'prod-demo-7', category_id: 'cat-demo-3', name: 'Indomie Goreng Spesial', sku: 'MAK-IND-GOR', buy_price: 2800, sell_price: 3500, stock_qty: 350, min_stock: 40, unit: 'pcs', is_active: true, categories: { name: 'Makanan Ringan', color: '#f59e0b' } },
-      { id: 'prod-demo-8', category_id: 'cat-demo-3', name: 'Roma Kelapa 300g', sku: 'MAK-ROM-KEL', buy_price: 8500, sell_price: 10500, stock_qty: 120, min_stock: 10, unit: 'pcs', is_active: true, categories: { name: 'Makanan Ringan', color: '#f59e0b' } },
-      { id: 'prod-demo-9', category_id: 'cat-demo-3', name: 'Chiki Balls Keju', sku: 'MAK-CHK-BAL', buy_price: 4000, sell_price: 5500, stock_qty: 140, min_stock: 15, unit: 'pcs', is_active: true, categories: { name: 'Makanan Ringan', color: '#f59e0b' } },
-      { id: 'prod-demo-10', category_id: 'cat-demo-4', name: 'Sampoerna Mild 16', sku: 'ROK-SAM-MLD', buy_price: 28000, sell_price: 31000, stock_qty: 90, min_stock: 5, unit: 'pack', is_active: true, categories: { name: 'Rokok', color: '#ef4444' } },
-      { id: 'prod-demo-11', category_id: 'cat-demo-4', name: 'Djarum Super 12', sku: 'ROK-DJR-SPR', buy_price: 21000, sell_price: 23500, stock_qty: 80, min_stock: 5, unit: 'pack', is_active: true, categories: { name: 'Rokok', color: '#ef4444' } },
-      { id: 'prod-demo-12', category_id: 'cat-demo-4', name: 'Gudang Garam Filter 12', sku: 'ROK-GGF-12', buy_price: 22000, sell_price: 24500, stock_qty: 80, min_stock: 5, unit: 'pack', is_active: true, categories: { name: 'Rokok', color: '#ef4444' } }
-    ]
-
-    // 3. Customers
-    const customersList = [
-      { id: 'cust-demo-1', name: 'Budi Santoso', phone: '08123456789', loyalty_points: 15 },
-      { id: 'cust-demo-2', name: 'Siti Aminah', phone: '08139876543', loyalty_points: 42 },
-      { id: 'cust-demo-3', name: 'Joko Widodo', phone: '08111222333', loyalty_points: 110 },
-      { id: 'cust-demo-4', name: 'Dewi Lestari', phone: '08187654321', loyalty_points: 25 },
-      { id: 'cust-demo-5', name: 'Rudi Hermawan', phone: '08571234567', loyalty_points: 8 }
-    ]
-
-    // 4. Storefront setup
-    const storefrontDetails = {
-      id: 'sf-demo-1',
-      slug: 'warung-makmur-jaya',
-      display_name: 'Warung Makmur Jaya',
-      description: 'Menjual sembako, minuman dingin, mie instan, dan kebutuhan sehari-hari Anda dengan harga murah!',
-      banner_url: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=800&auto=format&fit=crop',
-      theme_color: 'emerald',
-      is_published: true
-    }
-
-    // 5. Storefront products catalog link
-    const storefrontProductsList = [
-      { id: 'sfp-demo-1', storefront_id: 'sf-demo-1', product_id: 'prod-demo-1', is_featured: true, sort_order: 1, custom_description: 'Produk fresh berkualitas di Warung Makmur Jaya: Beras Sentra Ramos 5kg.' },
-      { id: 'sfp-demo-2', storefront_id: 'sf-demo-1', product_id: 'prod-demo-2', is_featured: true, sort_order: 2, custom_description: 'Minyak goreng fresh Bimoli 2L.' },
-      { id: 'sfp-demo-3', storefront_id: 'sf-demo-1', product_id: 'prod-demo-3', is_featured: false, sort_order: 3, custom_description: 'Gula pasir Gulaku murni manis.' },
-      { id: 'sfp-demo-4', storefront_id: 'sf-demo-1', product_id: 'prod-demo-4', is_featured: false, sort_order: 4, custom_description: 'Aqua botol segar dingin.' },
-      { id: 'sfp-demo-5', storefront_id: 'sf-demo-1', product_id: 'prod-demo-5', is_featured: false, sort_order: 5, custom_description: 'Teh botol Sosro nikmat segar.' }
-    ]
-
-    // 6. Online Orders
-    const onlineOrdersList = [
-      {
-        id: 'online-mock-1',
-        storefront_id: 'sf-demo-1',
-        customer_name: 'Dewi Lestari',
-        customer_phone: '08187654321',
-        customer_address: 'Jl. Melati No. 5, Jakarta',
-        shipping_method: 'delivery',
-        payment_method: 'cod',
-        items: [
-          { product_id: 'prod-demo-1', quantity: 1, unit_price: 75000, subtotal: 75000 },
-          { product_id: 'prod-demo-4', quantity: 2, unit_price: 3500, subtotal: 7000 }
-        ],
-        total_amount: 82000,
-        notes: 'Kirim sore hari ya',
-        status: 'pending',
-        created_at: new Date(Date.now() - 3600000 * 3).toISOString()
-      },
-      {
-        id: 'online-mock-2',
-        storefront_id: 'sf-demo-1',
-        customer_name: 'Rudi Hermawan',
-        customer_phone: '08571234567',
-        customer_address: 'Jl. Merpati No. 12, Jakarta',
-        shipping_method: 'pickup',
-        payment_method: 'qris',
-        items: [
-          { product_id: 'prod-demo-2', quantity: 1, unit_price: 36500, subtotal: 36500 }
-        ],
-        total_amount: 36500,
-        notes: 'Saya ambil nanti jam 12',
-        status: 'completed',
-        created_at: new Date(Date.now() - 3600000 * 24).toISOString()
-      }
-    ]
-
-    const seededMovements: any[] = []
-    const seededOrders: any[] = []
-
-    // Add initial purchase movements
-    productsList.forEach(p => {
-      seededMovements.push({
-        id: `move-mock-${p.id}-init`,
-        product_id: p.id,
-        supplier_id: 'supplier-demo-1',
-        type: 'purchase',
-        quantity: p.stock_qty,
-        qty_before: 0,
-        qty_after: p.stock_qty,
-        unit_cost: p.buy_price,
-        reference_type: 'adjustment',
-        notes: 'Stok awal ditambahkan via Data Seeder Sistem',
-        created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-      })
-    })
-
-    const productStocks: Record<string, number> = {}
-    productsList.forEach(p => {
-      productStocks[p.id] = p.stock_qty
-    })
-
-    const orderDates: { date: Date; dayStr: string }[] = []
-    const now = new Date()
-
-    // Distribute transactions across last 30 days
-    for (let dayOffset = 30; dayOffset >= 0; dayOffset--) {
-      const numOrders = Math.floor(Math.random() * 3) + 1 // 1 to 3 orders per day
-      for (let oIdx = 0; oIdx < numOrders; oIdx++) {
-        const orderDate = new Date(now.getTime())
-        orderDate.setDate(now.getDate() - dayOffset)
-        
-        const rand = Math.random()
-        let hour = 8
-        if (rand < 0.25) {
-          hour = 11 + Math.floor(Math.random() * 3)
-        } else if (rand < 0.7) {
-          hour = 16 + Math.floor(Math.random() * 5)
-        } else {
-          hour = 8 + Math.floor(Math.random() * 11)
-        }
-        orderDate.setHours(hour, Math.floor(Math.random() * 60), Math.floor(Math.random() * 60), 0)
-        orderDates.push({ date: orderDate, dayStr: orderDate.toISOString().split('T')[0] as string })
-      }
-    }
-
-    orderDates.sort((a, b) => a.date.getTime() - b.date.getTime())
-
-    let orderNumberCounter = 1
-    orderDates.forEach(od => {
-      const transactionDate = od.date
-      const datePrefix = od.dayStr.replace(/-/g, '')
-      const paddedCounter = String(orderNumberCounter++).padStart(4, '0')
-      const orderNumber = `WK-${datePrefix}-${paddedCounter}`
-
-      const isGuest = Math.random() < 0.5
-      const customer = isGuest ? null : customersList[Math.floor(Math.random() * customersList.length)]
-
-      const numItems = Math.floor(Math.random() * 3) + 1
-      const selectedProds: any[] = []
-      const availableProds = [...productsList]
-
-      for (let i = 0; i < numItems; i++) {
-        const pIdx = Math.floor(Math.random() * availableProds.length)
-        selectedProds.push(availableProds.splice(pIdx, 1)[0])
-      }
-
-      let subtotal = 0
-      const itemsPayload: any[] = []
-
-      selectedProds.forEach(prod => {
-        const isSembako = prod.sku.startsWith('SEM')
-        const qty = isSembako ? (Math.random() < 0.8 ? 1 : 2) : (Math.floor(Math.random() * 3) + 1)
-        const itemSubtotal = qty * prod.sell_price
-        subtotal += itemSubtotal
-
-        itemsPayload.push({
-          product_id: prod.id,
-          quantity: qty,
-          unit_price: prod.sell_price,
-          discount: 0,
-          subtotal: itemSubtotal
-        })
-
-        const curStock = productStocks[prod.id] || 50
-        const nextStock = curStock - qty
-        productStocks[prod.id] = nextStock
-
-        seededMovements.push({
-          id: `move-mock-${prod.id}-${orderNumber}`,
-          product_id: prod.id,
-          type: 'sale',
-          quantity: -qty,
-          qty_before: curStock,
-          qty_after: nextStock,
-          unit_cost: null,
-          reference_id: `order-demo-${orderNumber}`,
-          reference_type: 'order',
-          notes: 'Penjualan Kasir POS',
-          created_at: transactionDate.toISOString()
-        })
-      })
-
-      const discountAmount = Math.random() < 0.15 ? (Math.random() < 0.5 ? 1000 : 2000) : 0
-      const totalAmount = Math.max(0, subtotal - discountAmount)
-
-      seededOrders.push({
-        id: `order-demo-${orderNumber}`,
-        merchant_id: 'demo-merchant-id',
-        customer_id: customer ? customer.id : null,
-        order_number: orderNumber,
-        status: 'paid',
-        subtotal: subtotal,
-        discount_amount: discountAmount,
-        total_amount: totalAmount,
-        notes: isGuest ? null : 'Penjualan POS Pelanggan Setia',
-        created_at: transactionDate.toISOString(),
-        items: itemsPayload
-      })
-    })
-
-    // Apply updated stocks
-    productsList.forEach(p => {
-      const stock = productStocks[p.id]
-      if (stock !== undefined) {
-        p.stock_qty = stock
-      }
-    })
-
-    // Sort & slice movements to last 100
-    const finalMovements = seededMovements
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, 100)
-
-    // Save everything to localStorage
-    localStorage.setItem('warungku_categories', JSON.stringify(categoriesList))
-    localStorage.setItem('warungku_products', JSON.stringify(productsList))
-    localStorage.setItem('warungku_customers', JSON.stringify(customersList))
-    localStorage.setItem('warungku_storefront', JSON.stringify(storefrontDetails))
-    localStorage.setItem('warungku_storefront_products', JSON.stringify(storefrontProductsList))
-    localStorage.setItem('warungku_online_orders', JSON.stringify(onlineOrdersList))
-    localStorage.setItem('warungku_orders', JSON.stringify(seededOrders))
-    localStorage.setItem('warungku_movements', JSON.stringify(finalMovements))
-
-    // Clear session & messages for AI coach to reset cleanly
-    localStorage.removeItem('warungku_ai_sessions')
-    localStorage.removeItem('warungku_ai_messages')
-
-    toast.add({
-      title: 'Seeding Berhasil',
-      description: 'Dataset Demo Mode berhasil dipopulasikan dengan 60+ pesanan POS!',
-      color: 'success'
-    })
-
-    // Refresh state reactively
-    await fetchData()
-  } catch (err: any) {
-    toast.add({
-      title: 'Seeding Gagal',
-      description: err.message,
-      color: 'error'
-    })
-  } finally {
-    seeding.value = false
-  }
-}
-
-async function clearDemoData() {
-  clearing.value = true
-  try {
-    localStorage.removeItem('warungku_categories')
-    localStorage.removeItem('warungku_products')
-    localStorage.removeItem('warungku_customers')
-    localStorage.removeItem('warungku_storefront')
-    localStorage.removeItem('warungku_storefront_products')
-    localStorage.removeItem('warungku_online_orders')
-    localStorage.removeItem('warungku_orders')
-    localStorage.removeItem('warungku_movements')
-    localStorage.removeItem('warungku_ai_sessions')
-    localStorage.removeItem('warungku_ai_messages')
-
-    toast.add({
-      title: 'Data Dihapus',
-      description: 'Seluruh dataset Demo Mode telah dikosongkan.',
-      color: 'success'
-    })
-
-    // Refresh state reactively
-    await fetchData()
-  } catch (err: any) {
-    toast.add({
-      title: 'Gagal Menghapus Data',
-      description: err.message,
-      color: 'error'
-    })
-  } finally {
-    clearing.value = false
-  }
-}
 
 async function copyCommand() {
   try {
@@ -1425,10 +1030,10 @@ onMounted(() => {
             />
             <div class="space-y-1">
               <h3 class="text-xl font-bold text-default">
-                {{ user?.user_metadata?.name || 'Demo Merchant' }}
+                {{ user?.user_metadata?.name || 'Admin Toko' }}
               </h3>
               <p class="text-xs text-muted font-mono tracking-wider uppercase">
-                Status: {{ isDemo ? 'Demo Merchant Mode' : 'Premium Active Tenant' }}
+                Status: Premium Active Tenant
               </p>
             </div>
           </div>
@@ -1436,7 +1041,7 @@ onMounted(() => {
           <div class="space-y-4">
             <div class="grid grid-cols-3 gap-2 py-2.5 border-b border-default/40">
               <span class="text-xs text-toned font-bold uppercase tracking-wider">Email Akun</span>
-              <span class="text-xs text-default col-span-2 font-mono truncate">{{ user?.email || 'demo@warungku.com' }}</span>
+              <span class="text-xs text-default col-span-2 font-mono truncate">{{ user?.email || '-' }}</span>
             </div>
 
             <div class="grid grid-cols-3 gap-2 py-2.5 border-b border-default/40">
@@ -1446,7 +1051,7 @@ onMounted(() => {
 
             <div class="grid grid-cols-3 gap-2 py-2.5 border-b border-default/40">
               <span class="text-xs text-toned font-bold uppercase tracking-wider">ID Tenant</span>
-              <span class="text-xs text-default col-span-2 font-mono truncate">{{ user?.id || 'demo-merchant-uuid-2026' }}</span>
+              <span class="text-xs text-default col-span-2 font-mono truncate">{{ user?.id || '-' }}</span>
             </div>
             
             <div class="grid grid-cols-3 gap-2 py-2.5 border-b border-default/40">
@@ -1489,72 +1094,14 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- Section: Local Storage Seeder -->
-          <div class="space-y-4">
-            <div class="space-y-1">
-              <h4 class="text-sm font-bold text-default">
-                1. Demo Mode Seeder (Browser Storage)
-              </h4>
-              <p class="text-xs text-toned leading-relaxed font-light">
-                Populasikan browser lokal Anda dengan dataset lengkap Indonesian Warung. Cocok untuk demo offline, walkthrough visual, dan memvisualisasikan grafik laporan bisnis 30 hari secara instan.
-              </p>
-            </div>
-
-            <!-- Stats grid preview -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 py-3">
-              <div class="bg-muted/10 border border-default/50 rounded-xl p-3 text-center">
-                <span class="block text-2xl font-extrabold text-default font-mono">4</span>
-                <span class="text-[9px] uppercase tracking-wider text-muted font-bold">Kategori</span>
-              </div>
-              <div class="bg-muted/10 border border-default/50 rounded-xl p-3 text-center">
-                <span class="block text-2xl font-extrabold text-default font-mono">12</span>
-                <span class="text-[9px] uppercase tracking-wider text-muted font-bold">Produk Catalog</span>
-              </div>
-              <div class="bg-muted/10 border border-default/50 rounded-xl p-3 text-center">
-                <span class="block text-2xl font-extrabold text-default font-mono">5</span>
-                <span class="text-[9px] uppercase tracking-wider text-muted font-bold">Pelanggan</span>
-              </div>
-              <div class="bg-muted/10 border border-default/50 rounded-xl p-3 text-center">
-                <span class="block text-2xl font-extrabold text-default font-mono">60+</span>
-                <span class="text-[9px] uppercase tracking-wider text-muted font-bold">POS Transaksi</span>
-              </div>
-            </div>
-
-            <div class="flex flex-col sm:flex-row gap-3 pt-2">
-              <UButton
-                color="success"
-                variant="solid"
-                icon="i-lucide-database-backup"
-                class="flex-1 justify-center py-2.5 rounded-xl font-bold cursor-pointer active:scale-[0.98]"
-                :loading="seeding"
-                @click="seedDemoData"
-              >
-                Populasikan Data Demo
-              </UButton>
-              
-              <UButton
-                color="neutral"
-                variant="soft"
-                icon="i-lucide-trash-2"
-                class="justify-center py-2.5 rounded-xl font-bold cursor-pointer active:scale-[0.98] px-5"
-                :loading="clearing"
-                @click="clearDemoData"
-              >
-                Reset Data
-              </UButton>
-            </div>
-          </div>
-
-          <div class="border-t border-default/50 my-6"></div>
-
           <!-- Section: Live Database Seeder -->
           <div class="space-y-4">
             <div class="space-y-1">
               <h4 class="text-sm font-bold text-default">
-                2. Live Database Seeder (Supabase SQL)
+                Live Database Seeder (Supabase SQL)
               </h4>
               <p class="text-xs text-toned leading-relaxed font-light">
-                Untuk mempopulasikan database relasional live Anda di Supabase dengan schema seeder identik, jalankan script Node CLI berikut di terminal repositori lokal Anda:
+                Untuk mempopulasikan database relasional live Anda di Supabase dengan schema seeder, jalankan script Node CLI berikut di terminal repositori lokal Anda:
               </p>
             </div>
 

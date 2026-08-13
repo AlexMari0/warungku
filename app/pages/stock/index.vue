@@ -84,74 +84,7 @@ const productState = reactive<Partial<ProductSchema>>({
 })
 
 // Fetch all initial data
-const { isDemo } = useDemoMode()
-
 async function fetchData() {
-  if (isDemo.value) {
-    loading.value = true
-
-    // 1. Fetch categories
-    const rawCats = localStorage.getItem('warungku_categories')
-    if (rawCats) {
-      categories.value = JSON.parse(rawCats)
-    } else {
-      const initial = [
-        { id: 'cat-1', name: 'Makanan', color: '#10b981', sort_order: 1, created_at: new Date().toISOString() },
-        { id: 'cat-2', name: 'Minuman', color: '#0284c7', sort_order: 2, created_at: new Date().toISOString() },
-        { id: 'cat-3', name: 'Rokok & Tembakau', color: '#f43f5e', sort_order: 3, created_at: new Date().toISOString() }
-      ]
-      localStorage.setItem('warungku_categories', JSON.stringify(initial))
-      categories.value = initial
-    }
-
-    // 2. Fetch products
-    const rawProds = localStorage.getItem('warungku_products')
-    if (rawProds) {
-      products.value = JSON.parse(rawProds)
-    } else {
-      const initialProds = [
-        {
-          id: 'prod-1',
-          merchant_id: 'demo-merchant-id',
-          category_id: 'cat-1',
-          name: 'Indomie Goreng Aceh',
-          sku: 'IND-GOR-ACH',
-          barcode: '8998888111222',
-          buy_price: 2500,
-          sell_price: 3500,
-          stock_qty: 40,
-          min_stock: 10,
-          unit: 'pcs',
-          image_url: 'https://images.unsplash.com/photo-1612927601601-6638404737ce?w=500&auto=format&fit=crop',
-          is_active: true,
-          created_at: new Date().toISOString(),
-          categories: { name: 'Makanan', color: '#10b981' }
-        },
-        {
-          id: 'prod-2',
-          merchant_id: 'demo-merchant-id',
-          category_id: 'cat-2',
-          name: 'Kopi Susu Gula Aren',
-          sku: 'KOPI-AREN-01',
-          barcode: '8997777111333',
-          buy_price: 8000,
-          sell_price: 12000,
-          stock_qty: 5,
-          min_stock: 10,
-          unit: 'porsi',
-          image_url: 'https://images.unsplash.com/photo-1541167760496-1628856ab772?w=500&auto=format&fit=crop',
-          is_active: true,
-          created_at: new Date().toISOString(),
-          categories: { name: 'Minuman', color: '#0284c7' }
-        }
-      ]
-      localStorage.setItem('warungku_products', JSON.stringify(initialProds))
-      products.value = initialProds
-    }
-    loading.value = false
-    return
-  }
-
   if (!user.value) return
   loading.value = true
   try {
@@ -258,92 +191,6 @@ function openEditModal(product: any) {
 
 // Create or update a product + log stock movements
 async function onSubmitProduct(event: FormSubmitEvent<ProductSchema>) {
-  if (isDemo.value) {
-    submittings.value = true
-    const cat = categories.value.find(c => c.id === event.data.category_id)
-    const payload = {
-      id: editingProduct.value?.id || `prod-${Date.now()}`,
-      merchant_id: 'demo-merchant-id',
-      category_id: event.data.category_id || null,
-      name: event.data.name,
-      sku: event.data.sku || null,
-      barcode: event.data.barcode || null,
-      buy_price: event.data.buy_price,
-      sell_price: event.data.sell_price,
-      stock_qty: event.data.stock_qty,
-      min_stock: event.data.min_stock,
-      unit: event.data.unit,
-      image_url: event.data.image_url || null,
-      is_active: event.data.is_active,
-      created_at: editingProduct.value?.created_at || new Date().toISOString(),
-      categories: cat ? { name: cat.name, color: cat.color } : null
-    }
-
-    let list = [...products.value]
-    const movementsList = JSON.parse(localStorage.getItem('warungku_movements') || '[]')
-
-    if (editingProduct.value) {
-      const oldQty = editingProduct.value.stock_qty
-      const qtyDiff = payload.stock_qty - oldQty
-
-      list = list.map(p => p.id === payload.id ? payload : p)
-
-      if (qtyDiff !== 0) {
-        movementsList.unshift({
-          id: `mov-${Date.now()}`,
-          merchant_id: 'demo-merchant-id',
-          product_id: payload.id,
-          type: 'adjustment',
-          quantity: qtyDiff,
-          qty_before: oldQty,
-          qty_after: payload.stock_qty,
-          unit_cost: payload.buy_price,
-          notes: 'Penyesuaian stok manual via edit produk (Demo)',
-          created_at: new Date().toISOString(),
-          products: { name: payload.name, sku: payload.sku, unit: payload.unit }
-        })
-      }
-
-      toast.add({
-        title: 'Produk diperbarui',
-        description: `Produk "${payload.name}" berhasil disimpan (Mode Demo).`,
-        color: 'success'
-      })
-    } else {
-      list.push(payload)
-
-      if (payload.stock_qty > 0) {
-        movementsList.unshift({
-          id: `mov-${Date.now()}`,
-          merchant_id: 'demo-merchant-id',
-          product_id: payload.id,
-          type: 'adjustment',
-          quantity: payload.stock_qty,
-          qty_before: 0,
-          qty_after: payload.stock_qty,
-          unit_cost: payload.buy_price,
-          notes: 'Stok awal produk baru (Demo)',
-          created_at: new Date().toISOString(),
-          products: { name: payload.name, sku: payload.sku, unit: payload.unit }
-        })
-      }
-
-      toast.add({
-        title: 'Produk berhasil ditambahkan',
-        description: `Produk "${payload.name}" telah terdaftar (Mode Demo).`,
-        color: 'success'
-      })
-    }
-
-    localStorage.setItem('warungku_products', JSON.stringify(list))
-    localStorage.setItem('warungku_movements', JSON.stringify(movementsList.slice(0, 100)))
-    products.value = list
-    isProductModalOpen.value = false
-    resetProductForm()
-    submittings.value = false
-    return
-  }
-
   if (!user.value) return
   submittings.value = true
 
@@ -456,23 +303,6 @@ async function toggleProductActive(product: any) {
   const newStatus = !product.is_active
 
   async function performToggle(status: boolean, isUndo = false) {
-    if (isDemo.value) {
-      const list = products.value.map(p => p.id === product.id ? { ...p, is_active: status } : p)
-      localStorage.setItem('warungku_products', JSON.stringify(list))
-      products.value = list
-      product.is_active = status
-      if (!isUndo) {
-        showToggleToast(product, status)
-      } else {
-        toast.add({
-          title: 'Perubahan Dibatalkan',
-          description: `Status "${product.name}" berhasil dikembalikan ke ${status ? 'Aktif' : 'Nonaktif'} (Mode Demo).`,
-          color: 'success'
-        })
-      }
-      return
-    }
-
     try {
       const { error } = await (supabase.from('products') as any)
         .update({ is_active: status })
@@ -535,27 +365,6 @@ async function executeDeleteProduct() {
   if (!productToDelete.value) return
   const product = productToDelete.value
   isDeleteModalOpen.value = false
-
-  if (isDemo.value) {
-    try {
-      const list = products.value.filter(p => p.id !== product.id)
-      localStorage.setItem('warungku_products', JSON.stringify(list))
-      products.value = list
-      toast.add({
-        title: 'Produk dihapus',
-        description: `Produk "${product.name}" berhasil dihapus (Mode Demo).`,
-        color: 'success'
-      })
-      productToDelete.value = null
-    } catch (err: any) {
-      toast.add({
-        title: 'Gagal menghapus produk',
-        description: err.message,
-        color: 'error'
-      })
-    }
-    return
-  }
 
   try {
     const { error } = await supabase
