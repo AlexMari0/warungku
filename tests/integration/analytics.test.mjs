@@ -6,7 +6,6 @@ dotenv.config()
 // These need to match your actual test data in the DB
 const TEST_EMAIL = 'test_1779208029340@warungku.com'
 const TEST_PASSWORD = 'TestPassword123!'
-const TEST_PRODUCT_ID = 'e3b0c442-989b-464c-8600-000000000001' // Provide a real valid product UUID here if needed
 
 async function run() {
   console.log('--- WarungKu Analytics Integration Test ---')

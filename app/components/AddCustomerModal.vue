@@ -17,8 +17,7 @@ const isOpen = computed({
 })
 
 const supabase = useSupabaseClient()
-const user = useSupabaseUser()
-const toast = useToast()
+const { createCustomer } = useCustomers()
 const submittings = ref(false)
 const customerSchema = z.object({
   name: z.string().min(3, 'Nama pelanggan minimal 3 karakter'),
@@ -38,53 +37,18 @@ function resetForm() {
 }
 
 async function onSubmit(event: FormSubmitEvent<CustomerSchema>) {
-  if (!user.value) return
   submittings.value = true
   try {
-    let merchantId = user.value.id
-    try {
-      const { data: merchantData } = await supabase
-        .from('merchants')
-        .select('id')
-        .single() as any
-      if (merchantData?.id) {
-        merchantId = merchantData.id
-      }
-    } catch (e) {
-      // Fallback
-    }
-
-    const payload = {
-      merchant_id: merchantId,
+    const created = await createCustomer({
       name: event.data.name,
-      phone: event.data.phone || null,
-      total_debt: 0,
-      loyalty_points: 0
+      phone: event.data.phone || undefined
+    })
+
+    if (created) {
+      emit('saved', created)
+      isOpen.value = false
+      resetForm()
     }
-
-    const { data, error } = await supabase
-      .from('customers')
-      .insert(payload as any)
-      .select()
-      .single() as any
-
-    if (error) throw error
-
-    toast.add({
-      title: 'Pelanggan ditambahkan',
-      description: `Pelanggan "${payload.name}" berhasil terdaftar.`,
-      color: 'success'
-    })
-
-    emit('saved', data)
-    isOpen.value = false
-    resetForm()
-  } catch (err: any) {
-    toast.add({
-      title: 'Gagal menambahkan pelanggan',
-      description: err.message,
-      color: 'error'
-    })
   } finally {
     submittings.value = false
   }

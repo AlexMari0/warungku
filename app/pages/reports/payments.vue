@@ -3,12 +3,7 @@ definePageMeta({
   layout: 'default'
 })
 
-const supabase = useSupabaseClient()
-const user = useSupabaseUser()
-const toast = useToast()
-
-const loading = ref(false)
-const paymentsData = ref<any[]>([])
+const { paymentSummaries: paymentsData, loading, fetchPaymentSummaries } = useReports()
 const period = ref<'daily' | 'weekly' | 'monthly'>('monthly')
 const hoveredMethod = ref<string | null>(null)
 
@@ -32,53 +27,21 @@ const paymentTrends: Record<string, number> = {
   cash: -1.2
 }
 
-async function fetchPayments() {
-  if (!user.value) return
-  loading.value = true
-
-  try {
-    const { data, error } = await supabase
-      .from('payment_method_summary')
-      .select('*')
-      .eq('period_type', period.value)
-      .order('total_amount', { ascending: false })
-
-    if (error) throw error
-    paymentsData.value = data || []
-  } catch (err: any) {
-    toast.add({
-      title: 'Gagal memuat data pembayaran',
-      description: err.message,
-      color: 'error'
-    })
-  } finally {
-    loading.value = false
-  }
+function loadData() {
+  fetchPaymentSummaries(period.value)
 }
 
 watch(period, () => {
-  fetchPayments()
+  loadData()
 })
 
 onMounted(() => {
-  fetchPayments()
+  loadData()
 })
 
 const grandTotalAmount = computed(() => paymentsData.value.reduce((acc, curr) => acc + Number(curr.total_amount), 0))
 
 // Format helpers
-function formatRupiah(amount: number) {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    maximumFractionDigits: 0
-  }).format(amount)
-}
-
-function formatNumber(num: number) {
-  return new Intl.NumberFormat('id-ID').format(num)
-}
-
 function getPercentage(amount: number | string) {
   if (grandTotalAmount.value === 0) return '0.0'
   return ((Number(amount) / grandTotalAmount.value) * 100).toFixed(1)

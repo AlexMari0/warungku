@@ -170,7 +170,7 @@ async function runStorefrontTests() {
     .eq('id', cat.id)
     .single()
 
-  assert(!guestCatErr, `Guest category read failed: ${guestCatErr?.message}`)
+  assert(!guestCatErr && guestCat, `Guest category read failed: ${guestCatErr?.message}`)
   console.log('✅ Guest public category check: PASS')
 
   // 4e. Submit online checkout order anonymously

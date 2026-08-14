@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { Motion } from 'motion-v'
 
-const user = useSupabaseUser()
-
 const bentoItems = [
   {
     id: 'pos',

@@ -3,59 +3,20 @@ definePageMeta({
   layout: 'default'
 })
 
-const supabase = useSupabaseClient()
-const user = useSupabaseUser()
-const toast = useToast()
-
-const loading = ref(false)
-const salesData = ref<any[]>([])
+const { productSales: salesData, loading, fetchProductSales } = useReports()
 const period = ref<'daily' | 'weekly' | 'monthly'>('monthly')
 
-async function fetchProductSales() {
-  if (!user.value) return
-  loading.value = true
-
-  try {
-    const { data, error } = await supabase
-      .from('product_sales_summary')
-      .select('*, products(name, image_url, sku, categories(name, color))')
-      .eq('period_type', period.value)
-      .order('quantity_sold', { ascending: false })
-      .limit(50)
-
-    if (error) throw error
-    salesData.value = data || []
-  } catch (err: any) {
-    toast.add({
-      title: 'Gagal memuat data penjualan produk',
-      description: err.message,
-      color: 'error'
-    })
-  } finally {
-    loading.value = false
-  }
+function loadData() {
+  fetchProductSales(period.value)
 }
 
 watch(period, () => {
-  fetchProductSales()
+  loadData()
 })
 
 onMounted(() => {
-  fetchProductSales()
+  loadData()
 })
-
-// Format helpers
-function formatRupiah(amount: number) {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    maximumFractionDigits: 0
-  }).format(amount)
-}
-
-function formatNumber(num: number) {
-  return new Intl.NumberFormat('id-ID').format(num)
-}
 
 // Sorting and analysis variables
 const sortBy = ref<'quantity_sold' | 'revenue' | 'gross_profit'>('quantity_sold')
@@ -117,16 +78,16 @@ const automatedInsights = computed(() => {
   const insights = []
   
   // Find highest quantity product
-  const highestQtyProd = [...salesData.value].sort((a, b) => b.quantity_sold - a.quantity_sold)[0]
+  const highestQtyProd = [...salesData.value].sort((a, b) => (b.quantity_sold || 0) - (a.quantity_sold || 0))[0]
   if (highestQtyProd) {
     insights.push({
       icon: 'i-lucide-zap',
-      text: `Produk terlaris berdasarkan volume penjualan adalah <span class="font-extrabold text-default">${highestQtyProd.products?.name || 'Unknown'}</span> dengan total <span class="font-bold font-mono text-default">${formatNumber(highestQtyProd.quantity_sold)}</span> pcs terjual.`
+      text: `Produk terlaris berdasarkan volume penjualan adalah <span class="font-extrabold text-default">${highestQtyProd.products?.name || 'Unknown'}</span> dengan total <span class="font-bold font-mono text-default">${formatNumber(highestQtyProd.quantity_sold || 0)}</span> pcs terjual.`
     })
   }
 
   // Find highest profit product
-  const highestProfitProd = [...salesData.value].sort((a, b) => b.gross_profit - a.gross_profit)[0]
+  const highestProfitProd = [...salesData.value].sort((a, b) => (b.gross_profit || 0) - (a.gross_profit || 0))[0]
   if (highestProfitProd) {
     const totalProfitSum = salesData.value.reduce((acc, p) => acc + (p.gross_profit || 0), 0) || 1
     const pct = ((highestProfitProd.gross_profit || 0) / totalProfitSum * 100).toFixed(1)
@@ -138,12 +99,12 @@ const automatedInsights = computed(() => {
     
     insights.push({
       icon: 'i-lucide-trending-up',
-      text: `Kontribusi laba tertinggi dihasilkan oleh <span class="font-extrabold text-default">${highestProfitProd.products?.name || 'Unknown'}</span> yang menyumbang <span class="font-bold font-mono text-emerald-500">${formatRupiah(highestProfitProd.gross_profit)}</span> (${pct}% dari total laba produk) selama ${periodText}.`
+      text: `Kontribusi laba tertinggi dihasilkan oleh <span class="font-extrabold text-default">${highestProfitProd.products?.name || 'Unknown'}</span> yang menyumbang <span class="font-bold font-mono text-emerald-500">${formatRupiah(highestProfitProd.gross_profit || 0)}</span> (${pct}% dari total laba produk) selama ${periodText}.`
     })
   }
 
   // General margin warning or success insight
-  const avgMargin = salesData.value.reduce((acc, p) => acc + ((p.gross_profit / (p.revenue || 1)) * 100), 0) / salesData.value.length
+  const avgMargin = salesData.value.reduce((acc, p) => acc + (((p.gross_profit || 0) / (p.revenue || 1)) * 100), 0) / (salesData.value.length || 1)
   insights.push({
     icon: 'i-lucide-pie-chart',
     text: `Rata-rata profit margin dari produk Anda mencapai <span class="font-bold font-mono text-emerald-500">${avgMargin.toFixed(0)}%</span>, menunjukkan efisiensi penetapan harga yang sangat sehat.`
@@ -343,17 +304,17 @@ const automatedInsights = computed(() => {
 
                 <!-- Quantity Sold -->
                 <td class="py-3 px-4 text-center font-extrabold font-mono text-default">
-                  {{ formatNumber(item.quantity_sold) }}
+                  {{ formatNumber(item.quantity_sold || 0) }}
                 </td>
 
                 <!-- Revenue -->
                 <td class="py-3 px-4 text-right font-extrabold font-mono text-default">
-                  {{ formatRupiah(item.revenue) }}
+                  {{ formatRupiah(item.revenue || 0) }}
                 </td>
 
                 <!-- Gross Profit -->
                 <td class="py-3 px-4 text-right font-black font-mono text-emerald-500">
-                  {{ formatRupiah(item.gross_profit) }}
+                  {{ formatRupiah(item.gross_profit || 0) }}
                 </td>
 
                 <!-- Profit Margin -->
@@ -361,18 +322,18 @@ const automatedInsights = computed(() => {
                   <span 
                     class="px-2.5 py-0.5 rounded-full font-extrabold text-[10px]"
                     :class="[
-                      (item.gross_profit / item.revenue * 100) >= 30 ? 'bg-emerald-500/10 text-emerald-600' :
-                      (item.gross_profit / item.revenue * 100) >= 15 ? 'bg-blue-500/10 text-blue-600' :
+                      (((item.gross_profit || 0) / (item.revenue || 1)) * 100) >= 30 ? 'bg-emerald-500/10 text-emerald-600' :
+                      (((item.gross_profit || 0) / (item.revenue || 1)) * 100) >= 15 ? 'bg-blue-500/10 text-blue-600' :
                       'bg-amber-500/10 text-amber-600'
                     ]"
                   >
-                    {{ item.revenue > 0 ? (item.gross_profit / item.revenue * 100).toFixed(0) : 0 }}%
+                    {{ (item.revenue || 0) > 0 ? (((item.gross_profit || 0) / (item.revenue || 1)) * 100).toFixed(0) : 0 }}%
                   </span>
                 </td>
 
                 <!-- Profit Contribution -->
                 <td class="py-3 px-4 text-center font-mono font-bold text-default">
-                  {{ ((item.gross_profit / totalProfit) * 100).toFixed(1) }}%
+                  {{ ((((item.gross_profit || 0) / totalProfit)) * 100).toFixed(1) }}%
                 </td>
               </tr>
             </tbody>

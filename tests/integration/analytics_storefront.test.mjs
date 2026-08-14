@@ -31,11 +31,12 @@ async function run() {
 
     // 2. Setup / Fetch Storefront
     console.log('2. Fetching active storefront...')
-    let { data: sfData, error: sfError } = await supabase
+    const { data: initialSfData, error: sfError } = await supabase
       .from('storefronts')
       .select('*')
       .eq('merchant_id', userId)
       .single()
+    let sfData = initialSfData
 
     if (sfError && sfError.code === 'PGRST116') {
       console.log('  Creating a dummy storefront for test...')

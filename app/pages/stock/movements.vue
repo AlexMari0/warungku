@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { StockMovement } from '~/types'
+
 definePageMeta({
   layout: 'default'
 })
@@ -7,7 +9,7 @@ const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 const toast = useToast()
 
-const movements = ref<any[]>([])
+const movements = ref<StockMovement[]>([])
 const loading = ref(false)
 const filterType = ref<string>('all')
 const searchProduct = ref<string>('')
@@ -214,22 +216,6 @@ function loadMore() {
 }
 
 // Format helpers
-function formatRupiah(amount: number) {
-  if (!amount) return '-'
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    maximumFractionDigits: 0
-  }).format(amount)
-}
-
-function formatDate(dateStr: string) {
-  return new Intl.DateTimeFormat('id-ID', {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(new Date(dateStr))
-}
-
 function triggerDatePicker(event: MouseEvent) {
   const target = event.currentTarget as HTMLElement
   const input = target.querySelector('input[type="date"]') as HTMLInputElement | null

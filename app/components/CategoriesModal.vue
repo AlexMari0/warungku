@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import * as z from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
+import type { Category } from '~/types'
 
 const props = defineProps<{
   open: boolean
@@ -20,12 +21,11 @@ const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 const toast = useToast()
 
-const categories = ref<any[]>([])
-const loading = ref(false)
+const { categories, loading, fetchCategories, createCategory, updateCategory, deleteCategory: performDeleteCategory } = useCategories()
 const submittings = ref(false)
 
 // Active category being edited (null = adding new)
-const editingCategory = ref<any | null>(null)
+const editingCategory = ref<Category | null>(null)
 
 // Color preset options (modern, sleek HSL palettes matching the premium aesthetic)
 const colorPresets = [
@@ -54,30 +54,6 @@ const state = reactive<Partial<Schema>>({
   sort_order: 0
 })
 
-// Fetch all categories for the active merchant
-async function fetchCategories() {
-  if (!user.value) return
-  loading.value = true
-  try {
-    const { data, error } = await supabase
-      .from('categories')
-      .select('*')
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: false })
-
-    if (error) throw error
-    categories.value = data || []
-  } catch (err: any) {
-    toast.add({
-      title: 'Gagal memuat kategori',
-      description: err.message,
-      color: 'error'
-    })
-  } finally {
-    loading.value = false
-  }
-}
-
 // Reset the form state
 function resetForm() {
   editingCategory.value = null
@@ -100,61 +76,21 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
   submittings.value = true
 
   try {
-    let merchantId = user.value.id
-    try {
-      const { data: merchantData } = await supabase
-        .from('merchants')
-        .select('id')
-        .single() as any
-      if (merchantData?.id) {
-        merchantId = merchantData.id
-      }
-    } catch (e) {
-      // Fallback to user.value.id
-    }
-
     const payload = {
-      merchant_id: merchantId,
       name: event.data.name,
       color: event.data.color,
       sort_order: event.data.sort_order
     }
 
     if (editingCategory.value) {
-      // Update existing category
-      const { error } = await (supabase.from('categories') as any)
-        .update(payload)
-        .eq('id', editingCategory.value.id)
-
-      if (error) throw error
-      toast.add({
-        title: 'Kategori diperbarui',
-        description: `Kategori "${payload.name}" berhasil disimpan.`,
-        color: 'success'
-      })
+      await updateCategory(editingCategory.value.id, payload)
     } else {
-      // Create new category
-      const { error } = await (supabase
-        .from('categories')
-        .insert(payload as any) as any)
-
-      if (error) throw error
-      toast.add({
-        title: 'Kategori dibuat',
-        description: `Kategori "${payload.name}" berhasil ditambahkan.`,
-        color: 'success'
-      })
+      await createCategory(payload)
     }
 
     resetForm()
     await fetchCategories()
     emit('saved')
-  } catch (err: any) {
-    toast.add({
-      title: 'Gagal menyimpan kategori',
-      description: err.message,
-      color: 'error'
-    })
   } finally {
     submittings.value = false
   }
@@ -166,33 +102,12 @@ async function deleteCategory(id: string, name: string) {
     return
   }
 
-  loading.value = true
-  try {
-    const { error } = await supabase
-      .from('categories')
-      .delete()
-      .eq('id', id)
-
-    if (error) throw error
-    toast.add({
-      title: 'Kategori dihapus',
-      description: `Kategori "${name}" berhasil dihapus.`,
-      color: 'success'
-    })
-
+  const success = await performDeleteCategory(id)
+  if (success) {
     if (editingCategory.value?.id === id) {
       resetForm()
     }
-    await fetchCategories()
     emit('saved')
-  } catch (err: any) {
-    toast.add({
-      title: 'Gagal menghapus kategori',
-      description: err.message,
-      color: 'error'
-    })
-  } finally {
-    loading.value = false
   }
 }
 

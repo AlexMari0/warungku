@@ -16,23 +16,6 @@ const isOpen = computed({
 
 const toast = useToast()
 
-function formatRupiah(amount: number) {
-  if (!amount && amount !== 0) return '-'
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    maximumFractionDigits: 0
-  }).format(amount)
-}
-
-function formatDate(dateStr: string) {
-  if (!dateStr) return '-'
-  return new Intl.DateTimeFormat('id-ID', {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(new Date(dateStr))
-}
-
 function handlePrint() {
   toast.add({
     title: 'Mencetak struk...',
