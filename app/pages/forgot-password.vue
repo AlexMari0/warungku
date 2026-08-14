@@ -39,10 +39,10 @@ async function onSubmit(payload: FormSubmitEvent<Schema>) {
       description: 'Tautan reset kata sandi telah dikirim ke email Anda.',
       color: 'success'
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.add({
       title: 'Gagal mengirim email',
-      description: error.message,
+      description: (error as Error).message || 'Terjadi kesalahan.',
       color: 'error'
     })
   } finally {

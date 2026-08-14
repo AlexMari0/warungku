@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import type { TopProductItem } from '~/components/reports/TopProductsList.vue'
+import type { TopProductItem } from '~/types'
 
 definePageMeta({
   layout: 'default'
 })
 
-const supabase = useSupabaseClient()
-
-const { summary, summaryComparison, hourlyTraffic, loading, fetchDashboardReports, calculateDateRange } = useReports()
+const { summary, summaryComparison, hourlyTraffic, loading, fetchDashboardReports, fetchTopProducts, calculateDateRange } = useReports()
 const topProducts = ref<TopProductItem[]>([])
 
 const selectedPeriod = ref<'today' | 'week' | 'month' | 'custom'>('today')
@@ -20,39 +18,7 @@ async function fetchDashboardData() {
 
   // Fetch top products for period
   const { startDate, endDate } = calculateDateRange(selectedPeriod.value, customStartDate.value, customEndDate.value)
-  try {
-    const { data: prodSalesData } = await (supabase.from('product_sales_summary') as any)
-      .select('*, products(name, image_url, sku, categories(name, color))')
-      .gte('summary_date', startDate)
-      .lte('summary_date', endDate)
-
-    const prodMap: Record<string, TopProductItem> = {}
-    if (prodSalesData) {
-      for (const row of prodSalesData) {
-        const pid = row.product_id
-        if (!prodMap[pid]) {
-          prodMap[pid] = {
-            name: row.products?.name || 'Unknown Product',
-            sku: row.products?.sku || '-',
-            category: row.products?.categories?.name || 'Umum',
-            color: row.products?.categories?.color || '#9ca3af',
-            qty: 0,
-            revenue: 0,
-            profit: 0
-          }
-        }
-        prodMap[pid].qty += (row.quantity_sold || 0)
-        prodMap[pid].revenue += (Number(row.revenue) || 0)
-        prodMap[pid].profit += (Number(row.gross_profit) || 0)
-      }
-    }
-
-    topProducts.value = Object.values(prodMap)
-      .sort((a, b) => b.qty - a.qty)
-      .slice(0, 5)
-  } catch (err: any) {
-    // Ignore top products fetch error
-  }
+  topProducts.value = await fetchTopProducts(startDate, endDate)
 }
 
 function setPeriod(p: 'today' | 'week' | 'month' | 'custom') {

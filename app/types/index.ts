@@ -233,6 +233,16 @@ export interface PaymentMethodSummary {
   total_amount: number
 }
 
+export interface TopProductItem {
+  name: string
+  sku: string
+  category: string
+  color: string
+  qty: number
+  revenue: number
+  profit: number
+}
+
 // ---------------------------------------------------------------------------
 // Module 4: Online Store
 // ---------------------------------------------------------------------------
@@ -257,7 +267,7 @@ export interface StorefrontProduct {
   sort_order: number
   custom_description: string | null
   // Joined relation
-  products?: Product | any
+  products?: Product | null
 }
 
 export interface OnlineOrder {
@@ -280,7 +290,7 @@ export interface AISession {
   id: string
   merchant_id: string
   title: string
-  context_snapshot?: Record<string, any> | null
+  context_snapshot?: Record<string, unknown> | null
   last_active_at: string
   created_at: string
 }

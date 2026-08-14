@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import * as z from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
+import type { Customer } from '~/types'
 
 const props = defineProps<{
   open: boolean
@@ -8,7 +9,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
-  'saved': [customer: any]
+  'saved': [customer: Customer]
 }>()
 
 const isOpen = computed({
@@ -16,7 +17,6 @@ const isOpen = computed({
   set: val => emit('update:open', val)
 })
 
-const supabase = useSupabaseClient()
 const { createCustomer } = useCustomers()
 const submittings = ref(false)
 const customerSchema = z.object({

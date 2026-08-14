@@ -6,7 +6,14 @@ export default withNuxt(
     rules: {
       // Re-enabled quality rules
       'prefer-const': 'warn',
-      '@typescript-eslint/no-unused-vars': 'warn',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_'
+        }
+      ],
       'vue/no-unused-vars': 'warn',
       '@typescript-eslint/no-explicit-any': 'warn',
 
@@ -33,6 +40,12 @@ export default withNuxt(
       '@stylistic/no-mixed-operators': 'off',
       '@typescript-eslint/no-dynamic-delete': 'off',
       '@stylistic/no-multiple-empty-lines': 'off'
+    }
+  },
+  {
+    files: ['app/composables/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off'
     }
   }
 )

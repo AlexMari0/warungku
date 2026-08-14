@@ -1,15 +1,14 @@
 <script setup lang="ts">
-import type { Customer } from '~/types'
+import type { Customer, PaymentMethod } from '~/types'
 
 definePageMeta({
   layout: 'default'
 })
 
-const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 const toast = useToast()
 
-const { products, fetchProducts } = useProducts()
+const { products, fetchProducts, fetchSalesFrequency } = useProducts()
 const { categories, fetchCategories } = useCategories()
 const { cart, addToCart, increaseQty, decreaseQty, removeFromCart, clearCart, cartSubtotal, totalCartItemsCount } = useCart()
 const { processingCheckout, isReceiptOpen, completedOrder, processCheckout, resetCheckoutState } = useCheckout()
@@ -19,11 +18,11 @@ const { customers, fetchCustomers } = useCustomers()
 const loading = ref(true)
 const salesFrequency = ref<Record<string, number>>({})
 
-const selectedCustomerId = ref<any>('general')
+const selectedCustomerId = ref<string | undefined>('general')
 const orderNotes = ref('')
 const discountType = ref<'rp' | 'percent'>('rp')
 const discountValue = ref<number>(0)
-const paymentMethod = ref<'cash' | 'qris' | 'gopay' | 'ovo' | 'dana' | 'transfer'>('cash')
+const paymentMethod = ref<PaymentMethod>('cash')
 const amountPaid = ref<number | null>(null)
 const isAddCustomerOpen = ref(false)
 
@@ -84,19 +83,11 @@ async function fetchPOSContext() {
     await fetchCategories()
     await fetchCustomers()
     await fetchProducts({ activeOnly: true, orderBy: 'created_at', orderAscending: false })
-
-    const { data: itemsData } = await (supabase.from('order_items') as any).select('product_id, quantity')
-    const freq: Record<string, number> = {}
-    if (itemsData) {
-      for (const item of (itemsData as any[])) {
-        freq[item.product_id] = (freq[item.product_id] || 0) + (item.quantity || 0)
-      }
-    }
-    salesFrequency.value = freq
-  } catch (err: any) {
+    salesFrequency.value = await fetchSalesFrequency()
+  } catch (err: unknown) {
     toast.add({
       title: 'Gagal memuat POS',
-      description: err.message,
+      description: (err as Error).message || 'Terjadi kesalahan.',
       color: 'error'
     })
   } finally {
@@ -115,7 +106,7 @@ async function handleCheckout() {
     paymentMethod: paymentMethod.value,
     amountPaid: amountPaid.value,
     cartTotal: cartTotal.value,
-    selectedCustomerId: selectedCustomerId.value,
+    selectedCustomerId: selectedCustomerId.value ?? null,
     discountAmount: discountAmount.value,
     orderNotes: orderNotes.value
   })
@@ -192,7 +183,7 @@ onMounted(() => {
 
     <ReceiptModal
       v-model:open="isReceiptOpen"
-      :order="completedOrder || {}"
+      :order="(completedOrder as unknown as any) || null"
       @new-transaction="resetPOSRegister"
     />
   </div>

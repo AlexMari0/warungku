@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { AIMessageUI } from '~/types'
 
-const props = defineProps<{
+defineProps<{
   message: AIMessageUI
   index: number
   typingIndex: number

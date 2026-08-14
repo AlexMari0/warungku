@@ -71,6 +71,22 @@ export function useProducts() {
 
       if (error) throw error
 
+      if (payload.stock_qty && payload.stock_qty > 0 && data) {
+        try {
+          await (supabase.from('stock_movements') as any).insert({
+            product_id: data.id,
+            type: 'adjustment',
+            quantity: payload.stock_qty,
+            qty_before: 0,
+            qty_after: payload.stock_qty,
+            unit_cost: payload.buy_price || 0,
+            notes: 'Stok awal produk baru'
+          })
+        } catch (_mErr: unknown) {
+          // Non-critical movement log failure
+        }
+      }
+
       toast.add({
         title: 'Produk berhasil ditambahkan',
         description: `Produk "${payload.name}" siap dijual.`,
@@ -121,7 +137,6 @@ export function useProducts() {
   async function deleteProduct(id: string): Promise<boolean> {
     try {
       const { error } = await (supabase.from('products') as any)
-        .from('products')
         .delete()
         .eq('id', id)
 
@@ -143,6 +158,55 @@ export function useProducts() {
       return false
     }
   }
+  /**
+   * Toggle product active status
+   */
+  async function toggleProductActive(id: string, status: boolean): Promise<boolean> {
+    try {
+      const { error } = await (supabase.from('products') as any)
+        .update({ is_active: status })
+        .eq('id', id)
+
+      if (error) throw error
+
+      const found = products.value.find(p => p.id === id)
+      if (found) {
+        found.is_active = status
+      }
+
+      return true
+    } catch (err: any) {
+      toast.add({
+        title: 'Gagal mengubah status',
+        description: err.message,
+        color: 'error'
+      })
+      return false
+    }
+  }
+
+  /**
+   * Fetch item sales frequency for ranking best sellers
+   */
+  async function fetchSalesFrequency(): Promise<Record<string, number>> {
+    if (!user.value) return {}
+    try {
+      const { data, error } = await (supabase.from('order_items') as any)
+        .select('product_id, quantity')
+
+      if (error) throw error
+
+      const freq: Record<string, number> = {}
+      if (data) {
+        for (const item of (data as any[])) {
+          freq[item.product_id] = (freq[item.product_id] || 0) + (item.quantity || 0)
+        }
+      }
+      return freq
+    } catch (_err: unknown) {
+      return {}
+    }
+  }
 
   return {
     products,
@@ -150,6 +214,8 @@ export function useProducts() {
     fetchProducts,
     createProduct,
     updateProduct,
-    deleteProduct
+    deleteProduct,
+    toggleProductActive,
+    fetchSalesFrequency
   }
 }

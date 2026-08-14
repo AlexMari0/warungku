@@ -10,17 +10,17 @@ const paymentMeta = {
   transfer: { label: 'Transfer', icon: 'i-lucide-send', color: 'warning' }
 }
 
-const props = defineProps<{
+defineProps<{
   cartTotal: number
   cartSubtotal: number
   discountAmount: number
   discountType: 'rp' | 'percent'
   discountValue: number
-  paymentMethod: 'cash' | 'qris' | 'gopay' | 'ovo' | 'dana' | 'transfer'
+  paymentMethod: PaymentMethod
   amountPaid: number | null
   changeAmount: number
   quickCashAmounts: number[]
-  selectedCustomerId: any
+  selectedCustomerId: string | undefined
   customers: Customer[]
   hasCartItems: boolean
   processing: boolean
@@ -29,9 +29,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:discountType': [value: 'rp' | 'percent']
   'update:discountValue': [value: number]
-  'update:paymentMethod': [value: 'cash' | 'qris' | 'gopay' | 'ovo' | 'dana' | 'transfer']
+  'update:paymentMethod': [value: PaymentMethod]
   'update:amountPaid': [value: number | null]
-  'update:selectedCustomerId': [value: any]
+  'update:selectedCustomerId': [value: string | undefined]
   'open-add-customer': []
   'cancel-transaction': []
   'checkout': []
@@ -44,7 +44,7 @@ const emit = defineEmits<{
     <div class="flex items-center gap-2">
       <div class="flex-grow">
         <USelect
-          :model-value="selectedCustomerId"
+          :model-value="selectedCustomerId ?? undefined"
           placeholder="Pilih Pelanggan"
           class="w-full"
           size="md"
@@ -52,7 +52,7 @@ const emit = defineEmits<{
             { label: 'Pelanggan Umum (Luring)', value: 'general' },
             ...customers.map(c => ({ label: `${c.name} (${c.phone || 'No WhatsApp'})`, value: c.id }))
           ]"
-          @update:model-value="emit('update:selectedCustomerId', $event)"
+          @update:model-value="emit('update:selectedCustomerId', $event as string | undefined)"
         />
       </div>
       <UButton

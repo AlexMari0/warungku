@@ -1,4 +1,6 @@
-import type { Storefront, StorefrontProduct, Category, Product } from '~/types'
+import type { Storefront, StorefrontProduct, Category, Product, OnlineOrder } from '~/types'
+import type { PublicCartItem } from '~/composables/usePublicCart'
+import { formatRupiah } from '~/utils/format'
 
 export type SlugStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid'
 
@@ -33,7 +35,7 @@ export function useStorefront() {
   /**
    * Fetch or auto-initialize merchant storefront settings & product exposures
    */
-  async function fetchStorefrontSettings(productsingsingsings: Product[] = []) {
+  async function fetchStorefrontSettings(allProducts: Product[] = []) {
     if (!user.value) return null
     loading.value = true
 
@@ -81,7 +83,7 @@ export function useStorefront() {
       if (sfpError) throw sfpError
 
       const map: Record<string, StorefrontProductLinkState> = {}
-      productsingsingsings.forEach(p => {
+      allProducts.forEach(p => {
         const found = ((sfpData as any) || []).find((link: any) => link.product_id === p.id)
         map[p.id] = {
           is_linked: !!found,
@@ -206,7 +208,7 @@ export function useStorefront() {
       } else {
         slugStatus.value = 'taken'
       }
-    } catch (e) {
+    } catch (_e: unknown) {
       slugStatus.value = 'idle'
     }
   }
@@ -256,11 +258,95 @@ export function useStorefront() {
         products: productsList as (StorefrontProduct & { products?: Product })[],
         categories: categoriesList
       }
-    } catch (err: any) {
+    } catch (_err: unknown) {
       return null
     } finally {
       loading.value = false
     }
+  }
+
+  /**
+   * Create an online storefront order
+   */
+  async function createOnlineOrder(payload: {
+    storefront_id: string
+    customer_name: string
+    customer_phone: string
+    total_amount: number
+    notes?: string
+    status?: string
+  }): Promise<OnlineOrder | null> {
+    try {
+      const { data, error } = await (supabase.from('online_orders') as any)
+        .insert({
+          ...payload,
+          status: payload.status || 'pending'
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+      return data as OnlineOrder
+    } catch (err: any) {
+      toast.add({
+        title: 'Checkout gagal',
+        description: err.message,
+        color: 'error'
+      })
+      return null
+    }
+  }
+
+  /**
+   * Track anonymous storefront analytics events
+   */
+  async function trackStorefrontEvent(slugStr: string, eventType: 'page_view' | 'whatsapp_click') {
+    try {
+      await (supabase as any).rpc('track_storefront_event', {
+        p_slug: slugStr,
+        p_event_type: eventType
+      })
+    } catch (_e: unknown) {
+      // Silently fail analytics tracking
+    }
+  }
+
+  /**
+   * Generate formatted WhatsApp order message URL
+   */
+  function generateWhatsAppOrderLink(params: {
+    storeName: string
+    cart: PublicCartItem[]
+    totalAmount: number
+    customerName: string
+    customerPhone: string
+    customerNotes?: string
+    merchantPhone?: string
+  }): string {
+    const { storeName, cart: cartItems, totalAmount, customerName, customerPhone, customerNotes, merchantPhone } = params
+
+    let itemsStr = ''
+    cartItems.forEach((item, idx) => {
+      itemsStr += `${idx + 1}. *${item.product.name}* (${item.quantity} ${item.product.unit}) x ${formatRupiah(item.product.sell_price)}\n`
+    })
+
+    const rawMessage = `*PESANAN WEB OFFICIAL - ${storeName.toUpperCase()}*\n
+Halo Kak! Saya ingin memesan produk dari katalog online Anda:
+
+*Daftar Belanja:*
+${itemsStr}
+*Total Pembayaran:* *${formatRupiah(totalAmount)}*
+
+*Detail Penerima:*
+• Nama: ${customerName}
+• Telepon: ${customerPhone}
+• Catatan / Alamat: ${customerNotes || '-'}
+
+Mohon konfirmasi pesanan dan instruksi pengiriman. Terima kasih!`
+
+    const encoded = encodeURIComponent(rawMessage)
+    const phone = merchantPhone || '6285123456789'
+    return `https://wa.me/${phone}?text=${encoded}`
   }
 
   function toggleProductLink(productId: string) {
@@ -287,6 +373,9 @@ export function useStorefront() {
     saveSettings,
     checkSlugAvailability,
     fetchPublicStorefront,
+    createOnlineOrder,
+    trackStorefrontEvent,
+    generateWhatsAppOrderLink,
     toggleProductLink,
     toggleFeatured
   }

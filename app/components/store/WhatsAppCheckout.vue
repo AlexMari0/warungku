@@ -1,10 +1,12 @@
 <script setup lang="ts">
-const props = defineProps<{
+import type { StoreThemeClasses } from '~/utils/storeThemes'
+
+defineProps<{
   isOpen: boolean
   customerName: string
   orderId: string | undefined
   whatsAppLink: string
-  activeThemeClasses: any
+  activeThemeClasses: StoreThemeClasses
 }>()
 
 const emit = defineEmits<{

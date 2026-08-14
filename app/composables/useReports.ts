@@ -1,4 +1,4 @@
-import type { DailySummary, HourlyTraffic, ProductSalesSummary, PaymentMethodSummary, SummaryComparison } from '~/types'
+import type { DailySummary, HourlyTraffic, ProductSalesSummary, PaymentMethodSummary, SummaryComparison, TopProductItem } from '~/types'
 
 export function useReports() {
   const supabase = useSupabaseClient()
@@ -265,6 +265,49 @@ export function useReports() {
     }
   }
 
+  /**
+   * Fetch and aggregate top products for a date range
+   */
+  async function fetchTopProducts(startDate: string, endDate: string): Promise<TopProductItem[]> {
+    if (!user.value) return []
+
+    try {
+      const { data: prodSalesData, error } = await (supabase.from('product_sales_summary') as any)
+        .select('*, products(name, image_url, sku, categories(name, color))')
+        .gte('summary_date', startDate)
+        .lte('summary_date', endDate)
+
+      if (error) throw error
+
+      const prodMap: Record<string, TopProductItem> = {}
+      if (prodSalesData) {
+        for (const row of prodSalesData) {
+          const pid = row.product_id
+          if (!prodMap[pid]) {
+            prodMap[pid] = {
+              name: row.products?.name || 'Unknown Product',
+              sku: row.products?.sku || '-',
+              category: row.products?.categories?.name || 'Umum',
+              color: row.products?.categories?.color || '#9ca3af',
+              qty: 0,
+              revenue: 0,
+              profit: 0
+            }
+          }
+          prodMap[pid].qty += (row.quantity_sold || 0)
+          prodMap[pid].revenue += (Number(row.revenue) || 0)
+          prodMap[pid].profit += (Number(row.gross_profit) || 0)
+        }
+      }
+
+      return Object.values(prodMap)
+        .sort((a, b) => b.qty - a.qty)
+        .slice(0, 5)
+    } catch (_err: unknown) {
+      return []
+    }
+  }
+
   return {
     summary,
     summaryComparison,
@@ -276,6 +319,7 @@ export function useReports() {
     fetchDashboardReports,
     fetchProductSales,
     fetchPaymentSummaries,
+    fetchTopProducts,
     refreshAnalytics
   }
 }

@@ -1,7 +1,41 @@
 <script setup lang="ts">
+export interface ReceiptItem {
+  id?: string
+  name?: string
+  unit?: string
+  quantity: number
+  unit_price: number
+  subtotal: number
+  discount?: number
+  product?: {
+    name?: string
+    unit?: string
+  }
+}
+
+export interface ReceiptOrder {
+  id?: string
+  order_number?: string
+  receipt_number?: string
+  created_at?: string | Date
+  subtotal?: number
+  discount_amount?: number
+  total_amount?: number
+  items?: ReceiptItem[]
+  payment?: {
+    method?: string
+    amount?: number
+    change_amount?: number
+  } | null
+  customer?: {
+    name?: string
+    phone?: string | null
+  } | null
+}
+
 const props = defineProps<{
   open: boolean
-  order: any // contains id, order_number, subtotal, discount_amount, total_amount, items, payment, customer, created_at
+  order: ReceiptOrder | null
 }>()
 
 const emit = defineEmits<{
@@ -125,7 +159,7 @@ function startNew() {
               </div>
               <div class="flex justify-between text-[10px] text-muted">
                 <span>{{ item.quantity }} {{ item.unit || item.product?.unit || 'pcs' }} x {{ formatRupiah(item.unit_price) }}</span>
-                <span v-if="item.discount > 0">Potongan: {{ formatRupiah(item.discount) }}</span>
+                <span v-if="item.discount && item.discount > 0">Potongan: {{ formatRupiah(item.discount) }}</span>
               </div>
             </div>
           </div>
@@ -137,7 +171,7 @@ function startNew() {
               <span>{{ formatRupiah(order?.subtotal) }}</span>
             </div>
             <div
-              v-if="order?.discount_amount > 0"
+              v-if="order && order.discount_amount && order.discount_amount > 0"
               class="flex justify-between text-error font-medium"
             >
               <span>Diskon Global:</span>

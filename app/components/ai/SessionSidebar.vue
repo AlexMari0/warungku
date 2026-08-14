@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { AISession } from '~/types'
 
-const props = defineProps<{
+defineProps<{
   isOpen: boolean
   sessions: AISession[]
   activeSessionId: string | null

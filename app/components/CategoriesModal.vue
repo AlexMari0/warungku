@@ -17,9 +17,7 @@ const isOpen = computed({
   set: val => emit('update:open', val)
 })
 
-const supabase = useSupabaseClient()
 const user = useSupabaseUser()
-const toast = useToast()
 
 const { categories, loading, fetchCategories, createCategory, updateCategory, deleteCategory: performDeleteCategory } = useCategories()
 const submittings = ref(false)
@@ -63,7 +61,7 @@ function resetForm() {
 }
 
 // Populate the form to edit an existing category
-function startEdit(category: any) {
+function startEdit(category: Category) {
   editingCategory.value = category
   state.name = category.name
   state.color = category.color || colorPresets[0]!.hex

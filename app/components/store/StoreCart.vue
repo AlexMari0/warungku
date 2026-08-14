@@ -1,14 +1,18 @@
 <script setup lang="ts">
-const props = defineProps<{
+import type { Product } from '~/types'
+import type { PublicCartItem } from '~/composables/usePublicCart'
+import type { StoreThemeClasses } from '~/utils/storeThemes'
+
+defineProps<{
   isOpen: boolean
-  cart: { product: any; quantity: number; custom_description: string | null }[]
+  cart: PublicCartItem[]
   cartTotalCount: number
   cartSubtotal: number
   customerName: string
   customerPhone: string
   customerNotes: string
   checkingOut: boolean
-  activeThemeClasses: any
+  activeThemeClasses: StoreThemeClasses
 }>()
 
 const emit = defineEmits<{
@@ -16,7 +20,7 @@ const emit = defineEmits<{
   'update:customerName': [value: string]
   'update:customerPhone': [value: string]
   'update:customerNotes': [value: string]
-  'add-to-cart': [item: any]
+  'add-to-cart': [item: { products?: Product; custom_description?: string | null }]
   'remove-from-cart': [productId: string]
   'checkout': []
 }>()

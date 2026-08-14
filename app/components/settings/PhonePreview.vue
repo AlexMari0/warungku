@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Storefront, Product } from '~/types'
 
-const props = defineProps<{
+defineProps<{
   storefront: Storefront
   storefrontProductsMap: Record<string, { is_linked: boolean; is_featured: boolean; custom_description: string }>
   products: Product[]

@@ -28,7 +28,7 @@ const livePreviewUrl = computed(() => {
 })
 
 const slugErrorMessage = ref('')
-let slugCheckTimeout: any = null
+let slugCheckTimeout: ReturnType<typeof setTimeout> | null = null
 
 function validateSlug(slugVal: string) {
   const clean = slugVal.trim().toLowerCase()
@@ -88,7 +88,7 @@ watch(() => storefront.value.slug, (newSlug) => {
         slugStatus.value = 'available'
         slugErrorMessage.value = ''
       }
-    } catch (err: any) {
+    } catch (_err: unknown) {
       slugStatus.value = 'invalid'
       slugErrorMessage.value = 'Gagal memeriksa ketersediaan alamat.'
     }
@@ -135,7 +135,7 @@ async function copyCommand() {
       description: 'Perintah seeder telah disalin ke papan klip.',
       color: 'success'
     })
-  } catch (err: any) {
+  } catch (_err: unknown) {
     toast.add({
       title: 'Gagal menyalin',
       description: 'Silakan salin perintah secara manual.',

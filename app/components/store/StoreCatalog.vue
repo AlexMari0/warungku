@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import type { Category, StorefrontProduct } from '~/types'
+import type { Category, StorefrontProduct, Product } from '~/types'
+import type { StoreThemeClasses } from '~/utils/storeThemes'
 
-const props = defineProps<{
-  featuredProducts: (StorefrontProduct & { products?: any })[]
-  filteredCatalog: (StorefrontProduct & { products?: any })[]
+defineProps<{
+  featuredProducts: (StorefrontProduct & { products: Product })[]
+  filteredCatalog: (StorefrontProduct & { products: Product })[]
   categories: Category[]
   selectedCategoryId: string
   searchQuery: string
-  activeThemeClasses: any
+  activeThemeClasses: StoreThemeClasses
 }>()
 
 const emit = defineEmits<{
   'update:selectedCategoryId': [categoryId: string]
   'update:searchQuery': [query: string]
-  'add-to-cart': [item: any]
+  'add-to-cart': [item: StorefrontProduct & { products: Product }]
 }>()
 </script>
 

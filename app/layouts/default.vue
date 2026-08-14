@@ -7,7 +7,7 @@ const colorMode = useColorMode()
 
 const isSidebarExpanded = ref(true)
 
-const displayUser = computed<any>(() => {
+const displayUser = computed(() => {
   return user.value
 })
 
@@ -42,16 +42,6 @@ const userItems = computed(() => [
   }]
 ])
 
-// Identify the active main module
-const activeModule = computed(() => {
-  if (route.path.startsWith('/stock')) return 'stock'
-  if (route.path.startsWith('/pos')) return 'pos'
-  if (route.path.startsWith('/reports')) return 'reports'
-  if (route.path.startsWith('/settings')) return 'settings'
-  if (route.path.startsWith('/ai')) return 'ai'
-  return 'dashboard'
-})
-
 // Helper to get friendly name
 const friendlyName = computed(() => {
   if (!displayUser.value) return 'Pengguna'
@@ -65,19 +55,6 @@ const friendlyName = computed(() => {
   }
   return emailName || 'Admin Toko'
 })
-
-// Sub-sidebar items for Stock module
-const stockMenuItems = [
-  { label: 'Semua Produk', icon: 'i-lucide-package', to: '/stock' },
-  { label: 'Mutasi Stok', icon: 'i-lucide-history', to: '/stock/movements' }
-]
-
-// Sub-sidebar items for Reports module
-const reportsMenuItems = [
-  { label: 'Ringkasan', icon: 'i-lucide-pie-chart', to: '/reports' },
-  { label: 'Penjualan Produk', icon: 'i-lucide-package-check', to: '/reports/products' },
-  { label: 'Metode Pembayaran', icon: 'i-lucide-wallet', to: '/reports/payments' }
-]
 </script>
 
 <template>

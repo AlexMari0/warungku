@@ -14,8 +14,7 @@ const emit = defineEmits<{
   'saved': []
 }>()
 
-const supabase = useSupabaseClient()
-const toast = useToast()
+const { createProduct, updateProduct } = useProducts()
 
 const submitting = ref(false)
 
@@ -37,7 +36,7 @@ const productSchema = z.object({
 
 type ProductSchema = z.output<typeof productSchema>
 
-const productState = reactive<any>({
+const productState = reactive<ProductSchema>({
   name: '',
   category_id: undefined,
   sku: '',
@@ -97,52 +96,15 @@ async function onSubmit(event: FormSubmitEvent<ProductSchema>) {
 
   try {
     if (props.editingProduct) {
-      const { error } = await (supabase.from('products') as any)
-        .update(payload)
-        .eq('id', props.editingProduct.id)
-
-      if (error) throw error
-
-      toast.add({
-        title: 'Produk diperbarui',
-        description: `Produk "${payload.name}" berhasil disimpan.`,
-        color: 'success'
-      })
+      const success = await updateProduct(props.editingProduct.id, payload)
+      if (!success) return
     } else {
-      const { data: newProd, error } = await (supabase.from('products') as any)
-        .insert(payload)
-        .select()
-        .single()
-
-      if (error) throw error
-
-      if (payload.stock_qty > 0 && newProd) {
-        await (supabase.from('stock_movements') as any).insert({
-          product_id: newProd.id,
-          type: 'adjustment',
-          quantity: payload.stock_qty,
-          qty_before: 0,
-          qty_after: payload.stock_qty,
-          unit_cost: payload.buy_price,
-          notes: 'Stok awal produk baru'
-        })
-      }
-
-      toast.add({
-        title: 'Produk berhasil ditambahkan',
-        description: `Produk "${payload.name}" telah terdaftar.`,
-        color: 'success'
-      })
+      const created = await createProduct(payload)
+      if (!created) return
     }
 
     emit('update:open', false)
     emit('saved')
-  } catch (err: any) {
-    toast.add({
-      title: 'Gagal menyimpan produk',
-      description: err.message,
-      color: 'error'
-    })
   } finally {
     submitting.value = false
   }
@@ -184,10 +146,11 @@ async function onSubmit(event: FormSubmitEvent<ProductSchema>) {
             label="Kategori Produk"
           >
             <USelect
-              v-model="productState.category_id"
+              :model-value="productState.category_id ?? undefined"
               placeholder="Pilih Kategori"
               class="w-full"
               :items="categories.map(c => ({ label: c.name, value: c.id }))"
+              @update:model-value="productState.category_id = $event as string | undefined"
             />
           </UFormField>
 

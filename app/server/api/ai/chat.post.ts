@@ -65,7 +65,7 @@ export default defineEventHandler(async (event) => {
   // 3. Construct response using matched documents
   let contextSnippet = ''
   if (matchedDocs && matchedDocs.length > 0) {
-    contextSnippet = matchedDocs.map((d: any) => `- ${d.content_payload}`).join('\n')
+    contextSnippet = (matchedDocs as Array<{ content_payload?: string }>).map(d => `- ${d.content_payload || ''}`).join('\n')
   }
 
   let finalResponse = ''

@@ -51,10 +51,10 @@ async function onSubmit(payload: FormSubmitEvent<Schema>) {
     })
 
     await navigateTo('/login')
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.add({
       title: 'Gagal memperbarui kata sandi',
-      description: error.message,
+      description: (error as Error).message || 'Terjadi kesalahan.',
       color: 'error'
     })
   } finally {

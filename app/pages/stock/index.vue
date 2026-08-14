@@ -5,11 +5,10 @@ definePageMeta({
   layout: 'default'
 })
 
-const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 const toast = useToast()
 
-const { products, loading: productsLoading, fetchProducts } = useProducts()
+const { products, loading: productsLoading, fetchProducts, toggleProductActive: toggleActiveInDb, deleteProduct } = useProducts()
 const { categories, fetchCategories } = useCategories()
 
 // Dialog states
@@ -25,10 +24,10 @@ async function fetchData() {
   try {
     await fetchCategories()
     await fetchProducts()
-  } catch (err: any) {
+  } catch (err: unknown) {
     toast.add({
       title: 'Gagal memuat data',
-      description: err.message,
+      description: (err as Error).message || 'Terjadi kesalahan.',
       color: 'error'
     })
   }
@@ -63,48 +62,35 @@ function confirmDeleteProduct(product: Product) {
 }
 
 // Toggle active status in real-time with Undo/Cancel action
-async function toggleProductActive(product: any) {
+async function handleToggleProductActive(product: Product) {
   const newStatus = !product.is_active
 
   async function performToggle(status: boolean, isUndo = false) {
-    try {
-      const { error } = await (supabase.from('products') as any)
-        .update({ is_active: status })
-        .eq('id', product.id)
+    const success = await toggleActiveInDb(product.id, status)
+    if (!success) return
 
-      if (error) throw error
-      product.is_active = status
-
-      if (!isUndo) {
-        toast.add({
-          title: status ? 'Produk Diaktifkan' : 'Produk Nonaktif',
-          description: `Status "${product.name}" diubah menjadi ${status ? 'Aktif' : 'Nonaktif'}.`,
-          color: 'success',
-          actions: [
-            {
-              label: 'Cancel/Undo',
-              color: 'neutral',
-              variant: 'subtle',
-              onClick: () => {
-                performToggle(!status, true)
-              }
-            }
-          ]
-        })
-      } else {
-        toast.add({
-          title: 'Perubahan Dibatalkan',
-          description: `Status "${product.name}" berhasil dikembalikan ke ${status ? 'Aktif' : 'Nonaktif'}.`,
-          color: 'success'
-        })
-      }
-    } catch (err: any) {
+    if (!isUndo) {
       toast.add({
-        title: 'Gagal mengubah status',
-        description: err.message,
-        color: 'error'
+        title: status ? 'Produk Diaktifkan' : 'Produk Nonaktif',
+        description: `Status "${product.name}" diubah menjadi ${status ? 'Aktif' : 'Nonaktif'}.`,
+        color: 'success',
+        actions: [
+          {
+            label: 'Cancel/Undo',
+            color: 'neutral',
+            variant: 'subtle',
+            onClick: () => {
+              performToggle(!status, true)
+            }
+          }
+        ]
       })
-      product.is_active = !status
+    } else {
+      toast.add({
+        title: 'Perubahan Dibatalkan',
+        description: `Status "${product.name}" berhasil dikembalikan ke ${status ? 'Aktif' : 'Nonaktif'}.`,
+        color: 'success'
+      })
     }
   }
 
@@ -118,24 +104,10 @@ async function executeDeleteProduct() {
   isDeleteModalOpen.value = false
 
   try {
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', product.id)
-
-    if (error) throw error
-    toast.add({
-      title: 'Produk dihapus',
-      description: `Produk "${product.name}" berhasil dihapus.`,
-      color: 'success'
-    })
-    await fetchData()
-  } catch (err: any) {
-    toast.add({
-      title: 'Gagal menghapus produk',
-      description: 'Produk tidak dapat dihapus jika memiliki mutasi stok atau order terkait. Silakan nonaktifkan saja.',
-      color: 'error'
-    })
+    const success = await deleteProduct(product.id)
+    if (success) {
+      await fetchData()
+    }
   } finally {
     productToDelete.value = null
   }
@@ -196,7 +168,7 @@ onMounted(() => {
       :loading="productsLoading"
       @edit="openEditModal"
       @delete="confirmDeleteProduct"
-      @toggle-active="toggleProductActive"
+      @toggle-active="handleToggleProductActive"
       @create-product="openAddModal"
     />
 

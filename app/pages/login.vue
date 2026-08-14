@@ -49,10 +49,10 @@ async function onSubmit(payload: FormSubmitEvent<Schema>) {
     })
 
     await navigateTo('/')
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.add({
       title: 'Gagal masuk',
-      description: error.message,
+      description: (error as Error).message || 'Terjadi kesalahan saat masuk.',
       color: 'error'
     })
   } finally {
