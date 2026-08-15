@@ -1,4 +1,4 @@
-.PHONY: dev build test vet clean docker-build
+.PHONY: dev build test vet clean docker-build seed-mock rollback-mock-data reset-mock
 
 dev:
 	go run ./cmd/api
@@ -17,3 +17,12 @@ clean:
 
 docker-build:
 	docker build -t warungku-api:latest .
+
+seed-mock:
+	go run ./cmd/seed -up
+
+rollback-mock-data:
+	go run ./cmd/seed -down
+
+reset-mock:
+	go run ./cmd/seed -reset
