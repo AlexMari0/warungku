@@ -10,10 +10,10 @@ import (
 )
 
 type ReportService struct {
-	repo *repo.ReportRepo
+	repo repo.IReportRepo
 }
 
-func NewReportService(repo *repo.ReportRepo) *ReportService {
+func NewReportService(repo repo.IReportRepo) *ReportService {
 	return &ReportService{repo: repo}
 }
 

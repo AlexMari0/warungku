@@ -11,11 +11,11 @@ import (
 )
 
 type ProductService struct {
-	productRepo       *repo.ProductRepo
-	stockMovementRepo *repo.StockMovementRepo
+	productRepo       repo.IProductRepo
+	stockMovementRepo repo.IStockMovementRepo
 }
 
-func NewProductService(productRepo *repo.ProductRepo, stockMovementRepo *repo.StockMovementRepo) *ProductService {
+func NewProductService(productRepo repo.IProductRepo, stockMovementRepo repo.IStockMovementRepo) *ProductService {
 	return &ProductService{
 		productRepo:       productRepo,
 		stockMovementRepo: stockMovementRepo,

@@ -10,10 +10,10 @@ import (
 )
 
 type CheckoutService struct {
-	orderRepo *repo.OrderRepo
+	orderRepo repo.IOrderRepo
 }
 
-func NewCheckoutService(orderRepo *repo.OrderRepo) *CheckoutService {
+func NewCheckoutService(orderRepo repo.IOrderRepo) *CheckoutService {
 	return &CheckoutService{orderRepo: orderRepo}
 }
 

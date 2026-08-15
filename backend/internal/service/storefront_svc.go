@@ -16,11 +16,11 @@ import (
 var slugRegex = regexp.MustCompile(`^[a-z0-9-_]+$`)
 
 type StorefrontService struct {
-	storefrontRepo *repo.StorefrontRepo
-	productRepo    *repo.ProductRepo
+	storefrontRepo repo.IStorefrontRepo
+	productRepo    repo.IProductRepo
 }
 
-func NewStorefrontService(storefrontRepo *repo.StorefrontRepo, productRepo *repo.ProductRepo) *StorefrontService {
+func NewStorefrontService(storefrontRepo repo.IStorefrontRepo, productRepo repo.IProductRepo) *StorefrontService {
 	return &StorefrontService{
 		storefrontRepo: storefrontRepo,
 		productRepo:    productRepo,

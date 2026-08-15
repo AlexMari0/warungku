@@ -14,10 +14,10 @@ import (
 )
 
 type AIService struct {
-	repo *repo.AIRepo
+	repo repo.IAIRepo
 }
 
-func NewAIService(repo *repo.AIRepo) *AIService {
+func NewAIService(repo repo.IAIRepo) *AIService {
 	return &AIService{repo: repo}
 }
 

@@ -1,0 +1,17 @@
+with-expecter: true
+inpackage: false
+dir: "mocks/{{.PackageName}}"
+mockname: "Mock{{.InterfaceName}}"
+filename: "mock_{{.InterfaceName}}.go"
+packages:
+  warungku-backend/internal/repo:
+    interfaces:
+      IAIRepo: {}
+      ICategoryRepo: {}
+      ICustomerRepo: {}
+      IOrderRepo: {}
+      IPaymentRepo: {}
+      IProductRepo: {}
+      IReportRepo: {}
+      IStockMovementRepo: {}
+      IStorefrontRepo: {}
