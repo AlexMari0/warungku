@@ -28,10 +28,10 @@ When working within specific subdirectories, consult the dedicated agent guides:
 
 ## ⚡ Core Rules for Agents
 
-1. **Zero Client-to-DB Direct Access**: Frontend composables in `app/composables/` must communicate with the Go backend via `useApiClient`, never querying Supabase PostgREST directly for business records.
+1. **Zero Client-to-DB Direct Access**: Frontend composables in `app/features/*/composables/` and `app/core/composables/` must communicate with the Go backend via `useApiClient`, never querying Supabase PostgREST directly for business records.
 2. **Atomic Checkout Invariant**: All POS checkout logic delegates to `pos_checkout_atomic` in PostgreSQL to guarantee atomic inventory decrement and transaction logging.
 3. **Tenant Isolation**: All queries accessing merchant-owned data must include `WHERE merchant_id = $N`. The `merchant_id` is extracted from the verified Supabase JWT in the Go auth middleware.
-4. **Type Alignment**: Go structs in `backend/internal/model/` and TypeScript interfaces in `app/types/index.ts` must stay synchronized with database schemas in `supabase/migrations/`.
+4. **Type Alignment**: Go structs in `backend/internal/model/` and TypeScript interfaces in `app/core/types/` must stay synchronized with database schemas in `supabase/migrations/`.
 5. **No Secrets in Code**: Environment variables belong in `.env` files (loaded via `godotenv`/`envconfig` in Go and `runtimeConfig` in Nuxt).
 
 ---

@@ -9,20 +9,21 @@ Authoritative reference for AI agents working in the **Frontend Application** (`
 ```
 app/
 ├── assets/css/main.css         # Obsidian dark theme & design tokens
-├── components/                 # Reusable UI components (modals, forms, cards, tables)
-├── composables/                # State management & Go backend API integration
-│   ├── useApiClient.ts         # Shared $fetch wrapper with JWT token injection
-│   ├── useProducts.ts          # Products domain composable
-│   ├── useCategories.ts        # Categories domain composable
-│   ├── useCheckout.ts          # POS checkout composable
-│   ├── useCustomers.ts         # Customers domain composable
-│   ├── useStockMovements.ts    # Stock movements composable
-│   ├── useStorefront.ts        # Online storefront & settings composable
-│   ├── useReports.ts           # Reports & analytics composable
-│   └── useAICoach.ts           # AI assistant conversation composable
+├── components/                 # Shared components
+│   └── ui/                     # Reusable UI primitives (buttons, modals, layout shells)
+├── core/                       # Core system logic & contracts
+│   ├── composables/
+│   │   └── useApiClient.ts     # Shared $fetch wrapper with JWT token injection
+│   └── types/                  # TypeScript domain types & interfaces
+├── features/                   # Self-contained feature modules (domain logic)
+│   ├── ai/                     # AI assistant conversation logic & UI
+│   ├── customers/              # Customers domain
+│   ├── pos/                    # Point-of-sale checkout flow
+│   ├── reports/                # Reports & analytics dashboard
+│   ├── stock/                  # Inventory & movement management
+│   └── storefront/             # Online storefront & settings
 ├── layouts/                    # Layout shells (default dashboard, auth, storefront)
 ├── pages/                      # Thin page orchestrators (< 250 LOC)
-├── types/                      # TypeScript domain types & interfaces
 └── utils/                      # Formatting helpers & theme swatches
 ```
 
