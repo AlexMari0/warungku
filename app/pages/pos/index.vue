@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Customer, PaymentMethod } from '~/types'
+import type { Customer, PaymentMethod } from '~/core/types'
 
 definePageMeta({
   layout: 'default'

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TopProductItem } from '~/types'
+import type { TopProductItem } from '~/core/types'
 
 definePageMeta({
   layout: 'default'

@@ -10,6 +10,25 @@ export default defineNuxtConfig({
     enabled: true
   },
 
+  imports: {
+    dirs: [
+      'core/composables/**',
+      'features/**/composables/**',
+    ]
+  },
+
+  components: [
+    {
+      path: '~/components/ui',
+      pathPrefix: false
+    },
+    {
+      path: '~/features',
+      pattern: '**/components/**',
+      pathPrefix: false
+    }
+  ],
+
   app: {
     head: {
       link: [
@@ -51,6 +70,7 @@ export default defineNuxtConfig({
   },
 
   supabase: {
-    redirect: false
+    redirect: false,
+    types: '~/core/types/database.types.ts'
   },
 })

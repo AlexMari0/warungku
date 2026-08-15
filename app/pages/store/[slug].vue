@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Motion } from 'motion-v'
-import type { Storefront, Category, StorefrontProduct, OnlineOrder, Product } from '~/types'
+import type { Storefront, Category, StorefrontProduct, OnlineOrder, Product } from '~/core/types'
 import { getStoreThemeClasses } from '~/utils/storeThemes'
 
 definePageMeta({

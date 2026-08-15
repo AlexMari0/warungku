@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AIMessageUI } from '~/types'
+import type { AIMessageUI } from '~/core/types'
 
 definePageMeta({
   layout: 'default'
