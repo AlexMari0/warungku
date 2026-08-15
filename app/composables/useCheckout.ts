@@ -11,7 +11,7 @@ export interface ProcessCheckoutParams {
 }
 
 export function useCheckout() {
-  const supabase = useSupabaseClient()
+  const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
   const toast = useToast()
 
@@ -20,7 +20,7 @@ export function useCheckout() {
   const completedOrder = ref<Order | null>(null)
 
   /**
-   * Execute atomic transaction checkout via database RPC
+   * Execute atomic transaction checkout via Go backend API
    */
   async function processCheckout(params: ProcessCheckoutParams): Promise<Order | null> {
     const { cart, paymentMethod, amountPaid, cartTotal, selectedCustomerId, discountAmount, orderNotes } = params
@@ -55,17 +55,24 @@ export function useCheckout() {
         discount: item.discount
       }))
 
-      const { data: checkoutResult, error: checkoutErr } = await (supabase as any)
-        .rpc('pos_checkout_atomic', {
-          p_items: itemsPayload,
-          p_payment_method: paymentMethod,
-          p_paid_amount: payAmount,
-          p_customer_id: selectedCustomerId && selectedCustomerId !== 'general' ? selectedCustomerId : null,
-          p_discount_amount: discountAmount,
-          p_notes: orderNotes || null
-        }) as any
-
-      if (checkoutErr) throw checkoutErr
+      const checkoutResult = await apiFetch<{
+        order: Order
+        items: any[]
+        payment: any
+        receipt: any
+        customer: any
+        points_earned: number
+      }>('/api/checkout', {
+        method: 'POST',
+        body: {
+          items: itemsPayload,
+          payment_method: paymentMethod,
+          paid_amount: payAmount,
+          customer_id: selectedCustomerId && selectedCustomerId !== 'general' ? selectedCustomerId : null,
+          discount_amount: discountAmount,
+          notes: orderNotes || null
+        }
+      })
 
       const orderFromDb = checkoutResult.order
       const itemsFromDb = checkoutResult.items || []
@@ -74,8 +81,8 @@ export function useCheckout() {
 
       const fullOrder: Order = {
         ...orderFromDb,
-        items: itemsFromDb,
-        payment: paymentFromDb,
+        order_items: itemsFromDb,
+        payments: paymentFromDb ? [paymentFromDb] : [],
         customer: customerFromDb
       }
 
@@ -89,10 +96,10 @@ export function useCheckout() {
 
       isReceiptOpen.value = true
       return fullOrder
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.add({
         title: 'Checkout Gagal',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
       return null

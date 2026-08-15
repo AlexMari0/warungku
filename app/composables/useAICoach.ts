@@ -1,7 +1,7 @@
 import type { AISession, AIMessageUI, AIQueryType } from '~/types'
 
 export function useAICoach() {
-  const supabase = useSupabaseClient()
+  const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
   const toast = useToast()
 
@@ -27,22 +27,17 @@ export function useAICoach() {
 
     loadingSessions.value = true
     try {
-      const { data, error } = await (supabase as any)
-        .from('ai_sessions')
-        .select('*')
-        .order('last_active_at', { ascending: false })
-
-      if (error) throw error
-      sessions.value = (data || []) as AISession[]
+      const data = await apiFetch<AISession[]>('/api/ai/sessions')
+      sessions.value = data || []
 
       if (sessions.value.length > 0 && !activeSessionId.value) {
         activeSessionId.value = sessions.value[0]?.id || null
       }
       return sessions.value
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal memuat sesi',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
       return []
@@ -59,21 +54,14 @@ export function useAICoach() {
     const newTitle = customTitle || `Analisis Baru #${sessions.value.length + 1}`
 
     try {
-      const { data, error } = await (supabase as any)
-        .from('ai_sessions')
-        .insert({
-          merchant_id: user.value.id,
-          title: newTitle,
-          context_snapshot: { source: 'web_dashboard' }
-        })
-        .select()
-        .single()
+      const data = await apiFetch<AISession>('/api/ai/sessions', {
+        method: 'POST',
+        body: { title: newTitle }
+      })
 
-      if (error) throw error
       if (data) {
-        const newSess = data as AISession
-        sessions.value = [newSess, ...sessions.value]
-        activeSessionId.value = newSess.id
+        sessions.value = [data, ...sessions.value]
+        activeSessionId.value = data.id
         messages.value = []
 
         toast.add({
@@ -81,13 +69,13 @@ export function useAICoach() {
           description: `Memulai percakapan "${newTitle}"`,
           color: 'success'
         })
-        return newSess
+        return data
       }
       return null
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal membuat sesi baru',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
       return null
@@ -101,13 +89,6 @@ export function useAICoach() {
     if (!newTitle.trim()) return false
 
     try {
-      const { error } = await (supabase as any)
-        .from('ai_sessions')
-        .update({ title: newTitle.trim() })
-        .eq('id', id)
-
-      if (error) throw error
-
       const idx = sessions.value.findIndex(s => s.id === id)
       if (idx !== -1 && sessions.value[idx]) {
         sessions.value[idx]!.title = newTitle.trim()
@@ -118,10 +99,10 @@ export function useAICoach() {
         color: 'success'
       })
       return true
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal mengubah nama sesi',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
       return false
@@ -133,12 +114,9 @@ export function useAICoach() {
    */
   async function deleteSession(id: string): Promise<boolean> {
     try {
-      const { error } = await (supabase as any)
-        .from('ai_sessions')
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
+      await apiFetch(`/api/ai/sessions/${id}`, {
+        method: 'DELETE'
+      })
 
       sessions.value = sessions.value.filter(s => s.id !== id)
       if (activeSessionId.value === id) {
@@ -150,10 +128,10 @@ export function useAICoach() {
         color: 'success'
       })
       return true
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal menghapus sesi',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
       return false
@@ -167,45 +145,31 @@ export function useAICoach() {
     loadingMessages.value = true
 
     try {
-      const { data, error } = await (supabase as any)
-        .from('ai_query_logs')
-        .select('*')
-        .eq('session_id', sessId)
-        .order('created_at', { ascending: true })
+      const data = await apiFetch<Array<{
+        id: string
+        session_id: string
+        query_text: string
+        response_text: string
+        query_type: string
+        created_at: string
+        rating?: string
+      }>>(`/api/ai/sessions/${sessId}/messages`)
 
-      if (error) throw error
-
-      const logIds = (data || []).map((d: any) => d.id)
-      const feedbackMap: Record<string, string> = {}
-
-      if (logIds.length > 0) {
-        const { data: fbData } = await (supabase as any)
-          .from('ai_feedback')
-          .select('query_log_id, rating')
-          .in('query_log_id', logIds)
-
-        if (fbData) {
-          fbData.forEach((fb: any) => {
-            feedbackMap[fb.query_log_id] = fb.rating
-          })
-        }
-      }
-
-      const formatted: AIMessageUI[] = (data || []).map((d: any) => ({
+      const formatted: AIMessageUI[] = (data || []).map(d => ({
         id: d.id,
         query_text: d.query_text,
         response_text: d.response_text,
         query_type: d.query_type as any,
         created_at: d.created_at,
-        rating: (feedbackMap[d.id] || null) as any
+        rating: (d.rating || null) as any
       }))
 
       messages.value = formatted
       return formatted
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal memuat pesan',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
       messages.value = []
@@ -248,7 +212,16 @@ export function useAICoach() {
     onSuccess?.()
 
     try {
-      const res = await $fetch<any>('/api/ai/chat', {
+      const res = await apiFetch<{
+        success: boolean
+        message: {
+          id: string
+          query_text: string
+          response_text: string
+          query_type: string
+          created_at: string
+        }
+      }>('/api/ai/chat', {
         method: 'POST',
         body: {
           query_text: finalPrompt,
@@ -273,17 +246,17 @@ export function useAICoach() {
         return finalMsg
       }
       return null
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal mengirim pesan',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
 
       const tempIdx = messages.value.findIndex(m => m.id === userMsgId)
       if (tempIdx !== -1 && messages.value[tempIdx]) {
         messages.value[tempIdx]!.failed = true
-        messages.value[tempIdx]!.error_text = err.message || 'Koneksi terputus. Silakan coba lagi.'
+        messages.value[tempIdx]!.error_text = (err as Error).message || 'Koneksi terputus. Silakan coba lagi.'
       }
       return null
     } finally {
@@ -305,16 +278,14 @@ export function useAICoach() {
    */
   async function rateResponse(message: AIMessageUI, rating: 'helpful' | 'not_helpful'): Promise<boolean> {
     try {
-      const { error } = await (supabase as any)
-        .from('ai_feedback')
-        .insert({
+      await apiFetch('/api/ai/feedback', {
+        method: 'POST',
+        body: {
           query_log_id: message.id,
-          merchant_id: user.value?.id,
           rating: rating,
           feedback_text: 'Disubmit melalui UI dashboard'
-        })
-
-      if (error) throw error
+        }
+      })
 
       message.rating = rating
       toast.add({
@@ -323,10 +294,10 @@ export function useAICoach() {
         color: 'success'
       })
       return true
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal memberikan tanggapan',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
       return false

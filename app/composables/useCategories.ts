@@ -1,7 +1,7 @@
 import type { Category } from '~/types'
 
 export function useCategories() {
-  const supabase = useSupabaseClient()
+  const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
   const toast = useToast()
 
@@ -19,17 +19,13 @@ export function useCategories() {
 
     loading.value = true
     try {
-      const { data, error } = await (supabase.from('categories') as any)
-        .select('*')
-        .order('sort_order', { ascending: true })
-
-      if (error) throw error
-      categories.value = (data || []) as Category[]
+      const data = await apiFetch<Category[]>('/api/categories')
+      categories.value = data || []
       return categories.value
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal memuat kategori',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
       categories.value = []
@@ -47,16 +43,13 @@ export function useCategories() {
 
     try {
       const nextSortOrder = categories.value.length + 1
-      const { data, error } = await (supabase.from('categories') as any)
-        .insert({
+      const data = await apiFetch<Category>('/api/categories', {
+        method: 'POST',
+        body: {
           ...payload,
-          merchant_id: user.value.id,
           sort_order: nextSortOrder
-        })
-        .select()
-        .single()
-
-      if (error) throw error
+        }
+      })
 
       toast.add({
         title: 'Kategori berhasil ditambahkan',
@@ -64,11 +57,11 @@ export function useCategories() {
         color: 'success'
       })
 
-      return data as Category
-    } catch (err: any) {
+      return data
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal membuat kategori',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
       return null
@@ -80,11 +73,10 @@ export function useCategories() {
    */
   async function updateCategory(id: string, payload: Partial<Category>): Promise<boolean> {
     try {
-      const { error } = await (supabase.from('categories') as any)
-        .update(payload)
-        .eq('id', id)
-
-      if (error) throw error
+      await apiFetch<Category>(`/api/categories/${id}`, {
+        method: 'PATCH',
+        body: payload
+      })
 
       toast.add({
         title: 'Kategori berhasil diperbarui',
@@ -92,10 +84,10 @@ export function useCategories() {
       })
 
       return true
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal memperbarui kategori',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
       return false
@@ -107,11 +99,9 @@ export function useCategories() {
    */
   async function deleteCategory(id: string): Promise<boolean> {
     try {
-      const { error } = await (supabase.from('categories') as any)
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
+      await apiFetch(`/api/categories/${id}`, {
+        method: 'DELETE'
+      })
 
       categories.value = categories.value.filter(c => c.id !== id)
       toast.add({
@@ -120,10 +110,10 @@ export function useCategories() {
       })
 
       return true
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal menghapus kategori',
-        description: err.message || 'Kategori ini mungkin sedang digunakan oleh produk.',
+        description: (err as Error).message || 'Kategori ini mungkin sedang digunakan oleh produk.',
         color: 'error'
       })
       return false
@@ -136,18 +126,19 @@ export function useCategories() {
   async function reorderCategories(orderedIds: string[]): Promise<boolean> {
     try {
       const updates = orderedIds.map((id, index) =>
-        (supabase.from('categories') as any)
-          .update({ sort_order: index + 1 })
-          .eq('id', id)
+        apiFetch(`/api/categories/${id}`, {
+          method: 'PATCH',
+          body: { sort_order: index + 1 }
+        })
       )
 
       await Promise.all(updates)
       await fetchCategories()
       return true
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal mengurutkan kategori',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
       return false

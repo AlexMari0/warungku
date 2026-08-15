@@ -15,7 +15,7 @@ export const STOCK_MOVEMENT_TYPE_META = {
 } as const
 
 export function useStockMovements() {
-  const supabase = useSupabaseClient()
+  const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
   const toast = useToast()
 
@@ -44,17 +44,6 @@ export function useStockMovements() {
   async function fetchMovements(reset = false) {
     if (!user.value) return
 
-    if (reset || totalLiveCount.value === 0) {
-      try {
-        const { count } = await (supabase
-          .from('stock_movements') as any)
-          .select('*', { count: 'exact', head: true })
-        totalLiveCount.value = count || 0
-      } catch (_e: unknown) {
-        // Silently handle count fetch error
-      }
-    }
-
     if (reset) {
       currentPage.value = 1
       movements.value = []
@@ -65,64 +54,19 @@ export function useStockMovements() {
     serverLoading.value = movements.value.length > 0
 
     try {
-      if (isInfiniteScrollActive.value) {
-        let query = (supabase
-          .from('stock_movements') as any)
-          .select('*, products!inner(name, sku, unit, category_id, categories(name))', { count: 'exact' })
-
-        if (searchProduct.value) {
-          query = query.or(`name.ilike.%${searchProduct.value}%,sku.ilike.%${searchProduct.value}%`, { foreignTable: 'products' })
+      const data = await apiFetch<StockMovement[]>('/api/stock-movements', {
+        query: {
+          type: filterType.value && filterType.value !== 'all' ? filterType.value : undefined,
+          limit: 100
         }
-        if (filterType.value && filterType.value !== 'all') {
-          query = query.eq('type', filterType.value)
-        }
-        if (startDate.value) {
-          const start = new Date(startDate.value)
-          start.setHours(0, 0, 0, 0)
-          query = query.gte('created_at', start.toISOString())
-        }
-        if (endDate.value) {
-          const end = new Date(endDate.value)
-          end.setHours(23, 59, 59, 999)
-          query = query.lte('created_at', end.toISOString())
-        }
+      })
 
-        const limit = 20
-        const from = (currentPage.value - 1) * limit
-        const to = from + limit - 1
-
-        const { data, count, error } = await query
-          .order('created_at', { ascending: false })
-          .range(from, to)
-
-        if (error) throw error
-
-        const rawData = data as any[] | null
-        if (reset) {
-          movements.value = rawData || []
-        } else {
-          const existingIds = new Set(movements.value.map((m: any) => m.id))
-          const newItems = (rawData || []).filter((m: any) => !existingIds.has(m.id))
-          movements.value = [...movements.value, ...newItems]
-        }
-
-        if (count !== null) {
-          totalLiveCount.value = count
-        }
-        hasMore.value = (rawData || []).length === limit
-      } else {
-        const { data, error } = await (supabase
-          .from('stock_movements') as any)
-          .select('*, products(name, sku, unit, category_id, categories(name))')
-          .order('created_at', { ascending: false })
-
-        if (error) throw error
-        movements.value = data || []
-      }
-    } catch (err: any) {
+      movements.value = data || []
+      totalLiveCount.value = movements.value.length
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal memuat mutasi',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
     } finally {

@@ -11,7 +11,7 @@ export interface StorefrontProductLinkState {
 }
 
 export function useStorefront() {
-  const supabase = useSupabaseClient()
+  const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
   const toast = useToast()
 
@@ -35,69 +35,26 @@ export function useStorefront() {
   /**
    * Fetch or auto-initialize merchant storefront settings & product exposures
    */
-  async function fetchStorefrontSettings(allProducts: Product[] = []) {
+  async function fetchStorefrontSettings(_allProducts: Product[] = []) {
     if (!user.value) return null
     loading.value = true
 
     try {
-      const { data: sfData, error: sfError } = await (supabase
-        .from('storefronts') as any)
-        .select('*')
-        .eq('merchant_id', user.value.id)
-        .maybeSingle()
+      const data = await apiFetch<{
+        storefront: Storefront
+        storefront_products_map: Record<string, StorefrontProductLinkState>
+      }>('/api/storefront/settings')
 
-      if (sfError) throw sfError
-
-      let activeSf = sfData
-      if (!activeSf) {
-        // Create initial default storefront
-        const namePart = user.value.email?.split('@')[0] || 'toko-saya'
-        const initialSf = {
-          merchant_id: user.value.id,
-          slug: `${namePart.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Math.floor(100 + Math.random() * 900)}`,
-          display_name: 'Toko Baru Saya',
-          description: 'Selamat datang di toko online resmi kami!',
-          theme_color: 'emerald',
-          banner_url: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=800&auto=format&fit=crop&q=80',
-          is_published: false
-        }
-
-        const { data: newSf, error: createError } = await (supabase
-          .from('storefronts') as any)
-          .insert(initialSf)
-          .select()
-          .single()
-
-        if (createError) throw createError
-        activeSf = newSf
+      if (data) {
+        storefront.value = data.storefront
+        storefrontProductsMap.value = data.storefront_products_map || {}
       }
 
-      storefront.value = activeSf
-
-      // Fetch linked storefront products
-      const { data: sfpData, error: sfpError } = await (supabase
-        .from('storefront_products') as any)
-        .select('*')
-        .eq('storefront_id', (activeSf as any).id)
-
-      if (sfpError) throw sfpError
-
-      const map: Record<string, StorefrontProductLinkState> = {}
-      allProducts.forEach(p => {
-        const found = ((sfpData as any) || []).find((link: any) => link.product_id === p.id)
-        map[p.id] = {
-          is_linked: !!found,
-          is_featured: found ? !!found.is_featured : false,
-          custom_description: found ? found.custom_description || '' : ''
-        }
-      })
-      storefrontProductsMap.value = map
-
-      return activeSf as Storefront
-    } catch (err: any) {
+      return storefront.value
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal memuat pengaturan toko',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
       return null
@@ -120,48 +77,27 @@ export function useStorefront() {
       }
       storefront.value.slug = cleanSlug
 
-      // 1. Update storefront parameters
-      const { error: sfError } = await (supabase
-        .from('storefronts') as any)
-        .update({
+      const data = await apiFetch<{
+        storefront: Storefront
+        storefront_products_map: Record<string, StorefrontProductLinkState>
+      }>('/api/storefront/settings', {
+        method: 'PATCH',
+        body: {
           slug: storefront.value.slug,
           display_name: storefront.value.display_name,
           description: storefront.value.description,
           banner_url: storefront.value.banner_url,
           theme_color: storefront.value.theme_color,
-          is_published: storefront.value.is_published
-        })
-        .eq('id', storefront.value.id)
-
-      if (sfError) throw sfError
-
-      // 2. Synchronize product link exposure in storefront_products
-      const { error: deleteError } = await (supabase
-        .from('storefront_products') as any)
-        .delete()
-        .eq('storefront_id', storefront.value.id)
-
-      if (deleteError) throw deleteError
-
-      const toInsert: any[] = []
-      Object.keys(storefrontProductsMap.value).forEach(pId => {
-        const item = storefrontProductsMap.value[pId]
-        if (item && item.is_linked) {
-          toInsert.push({
-            storefront_id: storefront.value.id,
-            product_id: pId,
-            is_featured: item.is_featured,
-            custom_description: item.custom_description || null
-          })
+          is_published: storefront.value.is_published,
+          storefront_products_map: storefrontProductsMap.value
         }
       })
 
-      if (toInsert.length > 0) {
-        const { error: insertError } = await (supabase
-          .from('storefront_products') as any)
-          .insert(toInsert)
-
-        if (insertError) throw insertError
+      if (data) {
+        storefront.value = data.storefront
+        if (data.storefront_products_map) {
+          storefrontProductsMap.value = data.storefront_products_map
+        }
       }
 
       toast.add({
@@ -171,10 +107,10 @@ export function useStorefront() {
       })
 
       return true
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal menyimpan pengaturan toko',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
       return false
@@ -195,15 +131,11 @@ export function useStorefront() {
 
     slugStatus.value = 'checking'
     try {
-      const { data, error } = await (supabase
-        .from('storefronts') as any)
-        .select('id')
-        .eq('slug', cleanSlug)
-        .maybeSingle()
+      const data = await apiFetch<{ available: boolean; slug: string }>('/api/storefront/check-slug', {
+        query: { slug: cleanSlug }
+      })
 
-      if (error) throw error
-
-      if (!data || data.id === storefront.value.id) {
+      if (data && data.available) {
         slugStatus.value = 'available'
       } else {
         slugStatus.value = 'taken'
@@ -219,44 +151,19 @@ export function useStorefront() {
   async function fetchPublicStorefront(slug: string) {
     loading.value = true
     try {
-      const { data: sfData, error: sfError } = await (supabase
-        .from('storefronts') as any)
-        .select('*')
-        .eq('slug', slug)
-        .eq('is_published', true)
-        .maybeSingle()
+      const data = await apiFetch<{
+        storefront: Storefront
+        categories: Category[]
+        featured_products: StorefrontProduct[]
+        catalog: StorefrontProduct[]
+      }>(`/api/public/store/${slug}`)
 
-      if (sfError) throw sfError
-      if (!sfData) return null
-
-      // Fetch linked products
-      const { data: sfpData, error: sfpError } = await (supabase
-        .from('storefront_products') as any)
-        .select('*, products(*)')
-        .eq('storefront_id', (sfData as any).id)
-
-      if (sfpError) throw sfpError
-
-      const productsList = sfpData || []
-      const categoryIds = productsList
-        .map((sfp: any) => sfp.products?.category_id)
-        .filter(Boolean)
-
-      let categoriesList: Category[] = []
-      if (categoryIds.length > 0) {
-        const { data: catData } = await (supabase
-          .from('categories') as any)
-          .select('*')
-          .in('id', categoryIds)
-          .order('sort_order', { ascending: true })
-
-        categoriesList = catData || []
-      }
+      if (!data) return null
 
       return {
-        storefront: sfData as Storefront,
-        products: productsList as (StorefrontProduct & { products?: Product })[],
-        categories: categoriesList
+        storefront: data.storefront,
+        products: data.catalog as (StorefrontProduct & { products?: Product })[],
+        categories: data.categories || []
       }
     } catch (_err: unknown) {
       return null
@@ -269,28 +176,30 @@ export function useStorefront() {
    * Create an online storefront order
    */
   async function createOnlineOrder(payload: {
-    storefront_id: string
+    storefront_id?: string
     customer_name: string
     customer_phone: string
     total_amount: number
     notes?: string
     status?: string
+    slug?: string
   }): Promise<OnlineOrder | null> {
     try {
-      const { data, error } = await (supabase.from('online_orders') as any)
-        .insert({
-          ...payload,
-          status: payload.status || 'pending'
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-      return data as OnlineOrder
-    } catch (err: any) {
+      const slug = payload.slug || storefront.value.slug
+      const data = await apiFetch<OnlineOrder>(`/api/public/store/${slug}/order`, {
+        method: 'POST',
+        body: {
+          customer_name: payload.customer_name,
+          customer_phone: payload.customer_phone,
+          total_amount: payload.total_amount,
+          notes: payload.notes
+        }
+      })
+      return data
+    } catch (err: unknown) {
       toast.add({
         title: 'Checkout gagal',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
       return null
@@ -302,9 +211,9 @@ export function useStorefront() {
    */
   async function trackStorefrontEvent(slugStr: string, eventType: 'page_view' | 'whatsapp_click') {
     try {
-      await (supabase as any).rpc('track_storefront_event', {
-        p_slug: slugStr,
-        p_event_type: eventType
+      await apiFetch(`/api/public/store/${slugStr}/track`, {
+        method: 'POST',
+        body: { event_type: eventType }
       })
     } catch (_e: unknown) {
       // Silently fail analytics tracking

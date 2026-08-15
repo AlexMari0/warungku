@@ -1,7 +1,7 @@
 import type { Customer } from '~/types'
 
 export function useCustomers() {
-  const supabase = useSupabaseClient()
+  const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
   const toast = useToast()
 
@@ -19,17 +19,13 @@ export function useCustomers() {
 
     loading.value = true
     try {
-      const { data, error } = await (supabase.from('customers') as any)
-        .select('*')
-        .order('name', { ascending: true })
-
-      if (error) throw error
-      customers.value = (data || []) as Customer[]
+      const data = await apiFetch<Customer[]>('/api/customers')
+      customers.value = data || []
       return customers.value
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal memuat daftar pelanggan',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
       customers.value = []
@@ -46,15 +42,10 @@ export function useCustomers() {
     if (!user.value) return null
 
     try {
-      const { data, error } = await (supabase.from('customers') as any)
-        .insert({
-          ...payload,
-          merchant_id: user.value.id
-        })
-        .select()
-        .single()
-
-      if (error) throw error
+      const data = await apiFetch<Customer>('/api/customers', {
+        method: 'POST',
+        body: payload
+      })
 
       toast.add({
         title: 'Pelanggan ditambahkan',
@@ -62,13 +53,12 @@ export function useCustomers() {
         color: 'success'
       })
 
-      const newCustomer = data as Customer
-      customers.value.unshift(newCustomer)
-      return newCustomer
-    } catch (err: any) {
+      customers.value.unshift(data)
+      return data
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal menambah pelanggan',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
       return null

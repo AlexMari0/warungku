@@ -7,7 +7,7 @@ export interface FetchProductsOptions {
 }
 
 export function useProducts() {
-  const supabase = useSupabaseClient()
+  const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
   const toast = useToast()
 
@@ -25,26 +25,20 @@ export function useProducts() {
 
     loading.value = true
     try {
-      let query = (supabase.from('products') as any)
-        .select('*, categories(*)')
+      const data = await apiFetch<Product[]>('/api/products', {
+        query: {
+          active_only: options?.activeOnly ? 'true' : 'false',
+          order_by: options?.orderBy || 'created_at',
+          order_asc: options?.orderAscending ? 'true' : 'false'
+        }
+      })
 
-      if (options?.activeOnly) {
-        query = query.eq('is_active', true)
-      }
-
-      const orderBy = options?.orderBy || 'created_at'
-      const ascending = options?.orderAscending ?? false
-      query = query.order(orderBy, { ascending })
-
-      const { data, error } = await query
-      if (error) throw error
-
-      products.value = (data || []) as Product[]
+      products.value = data || []
       return products.value
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal mengambil data produk',
-        description: err.message || 'Terjadi kesalahan pada server database.',
+        description: (err as Error).message || 'Terjadi kesalahan pada server database.',
         color: 'error'
       })
       products.value = []
@@ -61,31 +55,10 @@ export function useProducts() {
     if (!user.value) return null
 
     try {
-      const { data, error } = await (supabase.from('products') as any)
-        .insert({
-          ...payload,
-          merchant_id: user.value.id
-        })
-        .select('*, categories(*)')
-        .single()
-
-      if (error) throw error
-
-      if (payload.stock_qty && payload.stock_qty > 0 && data) {
-        try {
-          await (supabase.from('stock_movements') as any).insert({
-            product_id: data.id,
-            type: 'adjustment',
-            quantity: payload.stock_qty,
-            qty_before: 0,
-            qty_after: payload.stock_qty,
-            unit_cost: payload.buy_price || 0,
-            notes: 'Stok awal produk baru'
-          })
-        } catch (_mErr: unknown) {
-          // Non-critical movement log failure
-        }
-      }
+      const data = await apiFetch<Product>('/api/products', {
+        method: 'POST',
+        body: payload
+      })
 
       toast.add({
         title: 'Produk berhasil ditambahkan',
@@ -93,11 +66,11 @@ export function useProducts() {
         color: 'success'
       })
 
-      return data as Product
-    } catch (err: any) {
+      return data
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal menambah produk',
-        description: err.message || 'Periksa data input Anda.',
+        description: (err as Error).message || 'Periksa data input Anda.',
         color: 'error'
       })
       return null
@@ -109,11 +82,10 @@ export function useProducts() {
    */
   async function updateProduct(id: string, payload: Partial<Product>): Promise<boolean> {
     try {
-      const { error } = await (supabase.from('products') as any)
-        .update(payload)
-        .eq('id', id)
-
-      if (error) throw error
+      await apiFetch<Product>(`/api/products/${id}`, {
+        method: 'PATCH',
+        body: payload
+      })
 
       toast.add({
         title: 'Produk berhasil diperbarui',
@@ -121,10 +93,10 @@ export function useProducts() {
       })
 
       return true
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal memperbarui produk',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
       return false
@@ -136,11 +108,9 @@ export function useProducts() {
    */
   async function deleteProduct(id: string): Promise<boolean> {
     try {
-      const { error } = await (supabase.from('products') as any)
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
+      await apiFetch(`/api/products/${id}`, {
+        method: 'DELETE'
+      })
 
       products.value = products.value.filter(p => p.id !== id)
       toast.add({
@@ -149,25 +119,25 @@ export function useProducts() {
       })
 
       return true
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal menghapus produk',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
       return false
     }
   }
+
   /**
    * Toggle product active status
    */
   async function toggleProductActive(id: string, status: boolean): Promise<boolean> {
     try {
-      const { error } = await (supabase.from('products') as any)
-        .update({ is_active: status })
-        .eq('id', id)
-
-      if (error) throw error
+      await apiFetch(`/api/products/${id}/toggle`, {
+        method: 'PATCH',
+        body: { is_active: status }
+      })
 
       const found = products.value.find(p => p.id === id)
       if (found) {
@@ -175,10 +145,10 @@ export function useProducts() {
       }
 
       return true
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.add({
         title: 'Gagal mengubah status',
-        description: err.message,
+        description: (err as Error).message,
         color: 'error'
       })
       return false
@@ -191,18 +161,8 @@ export function useProducts() {
   async function fetchSalesFrequency(): Promise<Record<string, number>> {
     if (!user.value) return {}
     try {
-      const { data, error } = await (supabase.from('order_items') as any)
-        .select('product_id, quantity')
-
-      if (error) throw error
-
-      const freq: Record<string, number> = {}
-      if (data) {
-        for (const item of (data as any[])) {
-          freq[item.product_id] = (freq[item.product_id] || 0) + (item.quantity || 0)
-        }
-      }
-      return freq
+      const data = await apiFetch<Record<string, number>>('/api/products/sales-frequency')
+      return data || {}
     } catch (_err: unknown) {
       return {}
     }
