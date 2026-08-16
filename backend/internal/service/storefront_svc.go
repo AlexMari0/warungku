@@ -6,6 +6,8 @@ import (
 	"math/rand"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 	"warungku-backend/internal/apperror"
 	"warungku-backend/internal/model"
 	"warungku-backend/internal/repo"
@@ -15,15 +17,24 @@ import (
 
 var slugRegex = regexp.MustCompile(`^[a-z0-9-_]+$`)
 
+type catalogCacheItem struct {
+	Data      *model.PublicStorefrontCatalog
+	ExpiresAt time.Time
+}
+
 type StorefrontService struct {
 	storefrontRepo repo.IStorefrontRepo
 	productRepo    repo.IProductRepo
+
+	catalogCache map[string]catalogCacheItem
+	catalogMu    sync.RWMutex
 }
 
 func NewStorefrontService(storefrontRepo repo.IStorefrontRepo, productRepo repo.IProductRepo) *StorefrontService {
 	return &StorefrontService{
 		storefrontRepo: storefrontRepo,
 		productRepo:    productRepo,
+		catalogCache:   make(map[string]catalogCacheItem),
 	}
 }
 
@@ -124,6 +135,11 @@ func (s *StorefrontService) SaveSettings(ctx context.Context, merchantID uuid.UU
 		}
 	}
 
+	// Invalidate cache
+	s.catalogMu.Lock()
+	delete(s.catalogCache, sf.Slug)
+	s.catalogMu.Unlock()
+
 	return &model.StorefrontSettingsResponse{
 		Storefront:            *sf,
 		StorefrontProductsMap: req.StorefrontProductsMap,
@@ -140,6 +156,17 @@ func (s *StorefrontService) CheckSlug(ctx context.Context, merchantID uuid.UUID,
 
 func (s *StorefrontService) GetPublicCatalog(ctx context.Context, slug string) (*model.PublicStorefrontCatalog, error) {
 	cleanSlug := strings.ToLower(strings.TrimSpace(slug))
+
+	// 1. Cek Cache
+	s.catalogMu.RLock()
+	item, exists := s.catalogCache[cleanSlug]
+	s.catalogMu.RUnlock()
+
+	if exists && time.Now().Before(item.ExpiresAt) {
+		return item.Data, nil
+	}
+
+	// 2. Ambil dari DB jika belum ada
 	catalog, err := s.storefrontRepo.FindPublicBySlug(ctx, cleanSlug)
 	if err != nil {
 		return nil, err
@@ -147,6 +174,15 @@ func (s *StorefrontService) GetPublicCatalog(ctx context.Context, slug string) (
 	if catalog == nil {
 		return nil, apperror.ErrNotFound("Toko online")
 	}
+
+	// 3. Simpan ke Cache (TTL: 30 Detik)
+	s.catalogMu.Lock()
+	s.catalogCache[cleanSlug] = catalogCacheItem{
+		Data:      catalog,
+		ExpiresAt: time.Now().Add(30 * time.Second),
+	}
+	s.catalogMu.Unlock()
+
 	return catalog, nil
 }
 

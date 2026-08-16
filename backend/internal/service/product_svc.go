@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"strings"
+	"sync"
+	"time"
 	"warungku-backend/internal/apperror"
 	"warungku-backend/internal/model"
 	"warungku-backend/internal/repo"
@@ -10,15 +12,24 @@ import (
 	"github.com/google/uuid"
 )
 
+type salesFreqCacheItem struct {
+	Data      map[string]int
+	ExpiresAt time.Time
+}
+
 type ProductService struct {
 	productRepo       repo.IProductRepo
 	stockMovementRepo repo.IStockMovementRepo
+
+	salesFreqCache map[uuid.UUID]salesFreqCacheItem
+	salesFreqMu    sync.RWMutex
 }
 
 func NewProductService(productRepo repo.IProductRepo, stockMovementRepo repo.IStockMovementRepo) *ProductService {
 	return &ProductService{
 		productRepo:       productRepo,
 		stockMovementRepo: stockMovementRepo,
+		salesFreqCache:    make(map[uuid.UUID]salesFreqCacheItem),
 	}
 }
 
@@ -117,5 +128,28 @@ func (s *ProductService) ToggleActive(ctx context.Context, merchantID, id uuid.U
 }
 
 func (s *ProductService) FetchSalesFrequency(ctx context.Context, merchantID uuid.UUID) (map[string]int, error) {
-	return s.productRepo.FetchSalesFrequency(ctx, merchantID)
+	// 1. Cek Cache
+	s.salesFreqMu.RLock()
+	item, exists := s.salesFreqCache[merchantID]
+	s.salesFreqMu.RUnlock()
+
+	if exists && time.Now().Before(item.ExpiresAt) {
+		return item.Data, nil
+	}
+
+	// 2. Jika Cache Expired/Tidak Ada, Ambil dari DB
+	freq, err := s.productRepo.FetchSalesFrequency(ctx, merchantID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. Simpan di Cache (TTL: 2 Menit)
+	s.salesFreqMu.Lock()
+	s.salesFreqCache[merchantID] = salesFreqCacheItem{
+		Data:      freq,
+		ExpiresAt: time.Now().Add(2 * time.Minute),
+	}
+	s.salesFreqMu.Unlock()
+
+	return freq, nil
 }
