@@ -13,8 +13,22 @@ const { categories, fetchCategories } = useCategories()
 
 // Dialog states
 const isCategoriesModalOpen = ref(false)
+const hasCategoriesOpened = ref(false)
+watch(isCategoriesModalOpen, (val) => {
+  if (val) hasCategoriesOpened.value = true
+})
+
 const isProductModalOpen = ref(false)
+const hasProductOpened = ref(false)
+watch(isProductModalOpen, (val) => {
+  if (val) hasProductOpened.value = true
+})
+
 const isDeleteModalOpen = ref(false)
+const hasDeleteOpened = ref(false)
+watch(isDeleteModalOpen, (val) => {
+  if (val) hasDeleteOpened.value = true
+})
 const editingProduct = ref<Product | null>(null)
 const productToDelete = ref<Product | null>(null)
 
@@ -202,13 +216,15 @@ onMounted(() => {
     <!-- Modals Section -->
 
     <!-- 1. Categories Management Modal -->
-    <CategoriesModal
+    <LazyCategoriesModal
+      v-if="hasCategoriesOpened"
       v-model:open="isCategoriesModalOpen"
       @saved="fetchData"
     />
 
     <!-- 2. Product Delete Confirmation Modal -->
     <UModal
+      v-if="hasDeleteOpened"
       v-model:open="isDeleteModalOpen"
       title="Konfirmasi Hapus Produk"
       class="max-w-md"
@@ -246,7 +262,8 @@ onMounted(() => {
     </UModal>
 
     <!-- 3. Product Add/Edit Dialog -->
-    <ProductFormModal
+    <LazyProductFormModal
+      v-if="hasProductOpened"
       v-model:open="isProductModalOpen"
       :editing-product="editingProduct"
       :categories="categories"

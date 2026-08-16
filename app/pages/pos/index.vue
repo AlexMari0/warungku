@@ -28,6 +28,15 @@ const discountValue = ref<number>(0)
 const paymentMethod = ref<PaymentMethod>('cash')
 const amountPaid = ref<number | null>(null)
 const isAddCustomerOpen = ref(false)
+const hasAddCustomerOpened = ref(false)
+watch(isAddCustomerOpen, (val) => {
+  if (val) hasAddCustomerOpened.value = true
+})
+
+const hasReceiptOpened = ref(false)
+watch(isReceiptOpen, (val) => {
+  if (val) hasReceiptOpened.value = true
+})
 
 const bestSellers = computed(() => {
   return [...products.value]
@@ -204,12 +213,14 @@ onMounted(() => {
     </div>
 
     <!-- Modals Auxiliary Section -->
-    <AddCustomerModal
+    <LazyAddCustomerModal
+      v-if="hasAddCustomerOpened"
       v-model:open="isAddCustomerOpen"
       @saved="onCustomerAdded"
     />
 
-    <ReceiptModal
+    <LazyReceiptModal
+      v-if="hasReceiptOpened"
       v-model:open="isReceiptOpen"
       :order="(completedOrder as unknown as any) || null"
       @new-transaction="resetPOSRegister"
