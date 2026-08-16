@@ -1,3 +1,4 @@
+import { defineStore, storeToRefs } from 'pinia'
 import type { CartItem, Order, PaymentMethod } from '~/core/types'
 
 export interface ProcessCheckoutParams {
@@ -10,7 +11,7 @@ export interface ProcessCheckoutParams {
   orderNotes?: string
 }
 
-export function useCheckout() {
+export const useCheckoutStore = defineStore('checkout', () => {
   const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
 
@@ -85,5 +86,14 @@ export function useCheckout() {
   return {
     processingCheckout,
     processCheckout
+  }
+})
+
+export function useCheckout() {
+  const store = useCheckoutStore()
+  const { processingCheckout } = storeToRefs(store)
+  return {
+    processingCheckout,
+    processCheckout: store.processCheckout
   }
 }

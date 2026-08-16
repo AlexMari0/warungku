@@ -1,6 +1,7 @@
+import { defineStore, storeToRefs } from 'pinia'
 import type { DailySummary, HourlyTraffic, ProductSalesSummary, PaymentMethodSummary, SummaryComparison, TopProductItem } from '~/core/types'
 
-export function useReports() {
+export const useReportsStore = defineStore('reports', () => {
   const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
 
@@ -236,5 +237,24 @@ export function useReports() {
     fetchPaymentSummaries,
     fetchTopProducts,
     refreshAnalytics
+  }
+})
+
+export function useReports() {
+  const store = useReportsStore()
+  const { summary, summaryComparison, hourlyTraffic, productSales, paymentSummaries, loading } = storeToRefs(store)
+  return {
+    summary,
+    summaryComparison,
+    hourlyTraffic,
+    productSales,
+    paymentSummaries,
+    loading,
+    calculateDateRange: store.calculateDateRange,
+    fetchDashboardReports: store.fetchDashboardReports,
+    fetchProductSales: store.fetchProductSales,
+    fetchPaymentSummaries: store.fetchPaymentSummaries,
+    fetchTopProducts: store.fetchTopProducts,
+    refreshAnalytics: store.refreshAnalytics
   }
 }

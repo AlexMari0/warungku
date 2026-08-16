@@ -1,3 +1,4 @@
+import { defineStore, storeToRefs } from 'pinia'
 import type { Storefront, StorefrontProduct, Category, Product, OnlineOrder } from '~/core/types'
 import type { PublicCartItem } from '~/features/storefront/composables/usePublicCart'
 import { formatRupiah } from '~/utils/format'
@@ -10,7 +11,7 @@ export interface StorefrontProductLinkState {
   custom_description: string
 }
 
-export function useStorefront() {
+export const useStorefrontStore = defineStore('storefront', () => {
   const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
 
@@ -266,5 +267,26 @@ Mohon konfirmasi pesanan dan instruksi pengiriman. Terima kasih!`
     generateWhatsAppOrderLink,
     toggleProductLink,
     toggleFeatured
+  }
+})
+
+export function useStorefront() {
+  const store = useStorefrontStore()
+  const { storefront, storefrontProductsMap, slugStatus, saving, loading } = storeToRefs(store)
+  return {
+    storefront,
+    storefrontProductsMap,
+    slugStatus,
+    saving,
+    loading,
+    fetchStorefrontSettings: store.fetchStorefrontSettings,
+    saveSettings: store.saveSettings,
+    checkSlugAvailability: store.checkSlugAvailability,
+    fetchPublicStorefront: store.fetchPublicStorefront,
+    createOnlineOrder: store.createOnlineOrder,
+    trackStorefrontEvent: store.trackStorefrontEvent,
+    generateWhatsAppOrderLink: store.generateWhatsAppOrderLink,
+    toggleProductLink: store.toggleProductLink,
+    toggleFeatured: store.toggleFeatured
   }
 }

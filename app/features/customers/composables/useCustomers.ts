@@ -1,6 +1,7 @@
+import { defineStore, storeToRefs } from 'pinia'
 import type { Customer } from '~/core/types'
 
-export function useCustomers() {
+export const useCustomersStore = defineStore('customers', () => {
   const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
 
@@ -52,5 +53,16 @@ export function useCustomers() {
     loading,
     fetchCustomers,
     createCustomer
+  }
+})
+
+export function useCustomers() {
+  const store = useCustomersStore()
+  const { customers, loading } = storeToRefs(store)
+  return {
+    customers,
+    loading,
+    fetchCustomers: store.fetchCustomers,
+    createCustomer: store.createCustomer
   }
 }

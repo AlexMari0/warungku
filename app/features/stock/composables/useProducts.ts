@@ -1,3 +1,4 @@
+import { defineStore, storeToRefs } from 'pinia'
 import type { Product } from '~/core/types'
 
 export interface FetchProductsOptions {
@@ -6,7 +7,7 @@ export interface FetchProductsOptions {
   orderAscending?: boolean
 }
 
-export function useProducts() {
+export const useProductsStore = defineStore('products', () => {
   const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
 
@@ -123,5 +124,20 @@ export function useProducts() {
     deleteProduct,
     toggleProductActive,
     fetchSalesFrequency
+  }
+})
+
+export function useProducts() {
+  const store = useProductsStore()
+  const { products, loading } = storeToRefs(store)
+  return {
+    products,
+    loading,
+    fetchProducts: store.fetchProducts,
+    createProduct: store.createProduct,
+    updateProduct: store.updateProduct,
+    deleteProduct: store.deleteProduct,
+    toggleProductActive: store.toggleProductActive,
+    fetchSalesFrequency: store.fetchSalesFrequency
   }
 }

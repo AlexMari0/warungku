@@ -1,6 +1,7 @@
+import { defineStore, storeToRefs } from 'pinia'
 import type { Category } from '~/core/types'
 
-export function useCategories() {
+export const useCategoriesStore = defineStore('categories', () => {
   const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
 
@@ -105,5 +106,19 @@ export function useCategories() {
     updateCategory,
     deleteCategory,
     reorderCategories
+  }
+})
+
+export function useCategories() {
+  const store = useCategoriesStore()
+  const { categories, loading } = storeToRefs(store)
+  return {
+    categories,
+    loading,
+    fetchCategories: store.fetchCategories,
+    createCategory: store.createCategory,
+    updateCategory: store.updateCategory,
+    deleteCategory: store.deleteCategory,
+    reorderCategories: store.reorderCategories
   }
 }

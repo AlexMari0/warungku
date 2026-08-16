@@ -1,3 +1,4 @@
+import { defineStore, storeToRefs } from 'pinia'
 import type { StockMovement } from '~/core/types'
 
 export interface StockMovementStats {
@@ -14,7 +15,7 @@ export const STOCK_MOVEMENT_TYPE_META = {
   waste: { label: 'Terbuang/Rusak', icon: 'i-lucide-trash-2', color: 'neutral' }
 } as const
 
-export function useStockMovements() {
+export const useStockMovementsStore = defineStore('stock-movements', () => {
   const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
 
@@ -183,5 +184,56 @@ export function useStockMovements() {
     fetchMovements,
     loadMore,
     clearDates
+  }
+})
+
+export function useStockMovements() {
+  const store = useStockMovementsStore()
+  const {
+    movements,
+    loading,
+    filterType,
+    searchProduct,
+    startDate,
+    endDate,
+    currentPage,
+    itemsPerPage,
+    totalLiveCount,
+    hasMore,
+    serverLoading,
+    isInfiniteScrollActive,
+    stats,
+    filteredMovements,
+    totalItems,
+    totalPages,
+    startIndex,
+    endIndex,
+    paginatedMovements
+  } = storeToRefs(store)
+
+  return {
+    movements,
+    loading,
+    filterType,
+    searchProduct,
+    startDate,
+    endDate,
+    currentPage,
+    itemsPerPage,
+    totalLiveCount,
+    hasMore,
+    serverLoading,
+    typeMeta: store.typeMeta,
+    isInfiniteScrollActive,
+    stats,
+    filteredMovements,
+    totalItems,
+    totalPages,
+    startIndex,
+    endIndex,
+    paginatedMovements,
+    fetchMovements: store.fetchMovements,
+    loadMore: store.loadMore,
+    clearDates: store.clearDates
   }
 }

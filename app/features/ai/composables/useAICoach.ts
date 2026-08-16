@@ -1,6 +1,7 @@
+import { defineStore, storeToRefs } from 'pinia'
 import type { AISession, AIMessageUI, AIQueryType } from '~/core/types'
 
-export function useAICoach() {
+export const useAICoachStore = defineStore('ai-coach', () => {
   const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
 
@@ -265,5 +266,27 @@ export function useAICoach() {
     sendMessage,
     retryMessage,
     rateResponse
+  }
+})
+
+export function useAICoach() {
+  const store = useAICoachStore()
+  const { sessions, activeSessionId, activeSession, messages, loadingSessions, loadingMessages, sendingMessage } = storeToRefs(store)
+  return {
+    sessions,
+    activeSessionId,
+    activeSession,
+    messages,
+    loadingSessions,
+    loadingMessages,
+    sendingMessage,
+    fetchSessions: store.fetchSessions,
+    createSession: store.createSession,
+    renameSession: store.renameSession,
+    deleteSession: store.deleteSession,
+    fetchMessages: store.fetchMessages,
+    sendMessage: store.sendMessage,
+    retryMessage: store.retryMessage,
+    rateResponse: store.rateResponse
   }
 }
