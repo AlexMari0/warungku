@@ -38,22 +38,22 @@ export function useStorefront() {
     if (!user.value) return { success: false, error: 'User not authenticated' }
     loading.value = true
 
-    try {
-      const data = await apiFetch<{
-        storefront: Storefront
-        storefront_products_map: Record<string, StorefrontProductLinkState>
-      }>('/api/storefront/settings')
+    const res = await apiFetch<{
+      storefront: Storefront
+      storefront_products_map: Record<string, StorefrontProductLinkState>
+    }>('/api/storefront/settings')
 
+    loading.value = false
+
+    if (res.success) {
+      const data = res.data
       if (data) {
         storefront.value = data.storefront
         storefrontProductsMap.value = data.storefront_products_map || {}
       }
-
       return { success: true, data: storefront.value }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
-    } finally {
-      loading.value = false
+    } else {
+      return { success: false, error: res.error }
     }
   }
 
@@ -64,41 +64,42 @@ export function useStorefront() {
     if (!user.value || !storefront.value.id) return { success: false, error: 'User not authenticated or storefront not loaded' }
     saving.value = true
 
-    try {
-      const cleanSlug = (storefront.value.slug || '').trim().toLowerCase().replace(/[^a-z0-9-_]/g, '')
-      if (!cleanSlug) {
-        throw new Error('Slug toko tidak boleh kosong dan hanya boleh berisi huruf, angka, strip (-), dan garis bawah (_).')
+    const cleanSlug = (storefront.value.slug || '').trim().toLowerCase().replace(/[^a-z0-9-_]/g, '')
+    if (!cleanSlug) {
+      saving.value = false
+      return { success: false, error: 'Slug toko tidak boleh kosong dan hanya boleh berisi huruf, angka, strip (-), dan garis bawah (_).' }
+    }
+    storefront.value.slug = cleanSlug
+
+    const res = await apiFetch<{
+      storefront: Storefront
+      storefront_products_map: Record<string, StorefrontProductLinkState>
+    }>('/api/storefront/settings', {
+      method: 'PATCH',
+      body: {
+        slug: storefront.value.slug,
+        display_name: storefront.value.display_name,
+        description: storefront.value.description,
+        banner_url: storefront.value.banner_url,
+        theme_color: storefront.value.theme_color,
+        is_published: storefront.value.is_published,
+        storefront_products_map: storefrontProductsMap.value
       }
-      storefront.value.slug = cleanSlug
+    })
 
-      const data = await apiFetch<{
-        storefront: Storefront
-        storefront_products_map: Record<string, StorefrontProductLinkState>
-      }>('/api/storefront/settings', {
-        method: 'PATCH',
-        body: {
-          slug: storefront.value.slug,
-          display_name: storefront.value.display_name,
-          description: storefront.value.description,
-          banner_url: storefront.value.banner_url,
-          theme_color: storefront.value.theme_color,
-          is_published: storefront.value.is_published,
-          storefront_products_map: storefrontProductsMap.value
-        }
-      })
+    saving.value = false
 
+    if (res.success) {
+      const data = res.data
       if (data) {
         storefront.value = data.storefront
         if (data.storefront_products_map) {
           storefrontProductsMap.value = data.storefront_products_map
         }
       }
-
       return { success: true }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
-    } finally {
-      saving.value = false
+    } else {
+      return { success: false, error: res.error }
     }
   }
 
@@ -113,17 +114,17 @@ export function useStorefront() {
     }
 
     slugStatus.value = 'checking'
-    try {
-      const data = await apiFetch<{ available: boolean; slug: string }>('/api/storefront/check-slug', {
-        query: { slug: cleanSlug }
-      })
+    const res = await apiFetch<{ available: boolean; slug: string }>('/api/storefront/check-slug', {
+      query: { slug: cleanSlug }
+    })
 
-      if (data && data.available) {
+    if (res.success) {
+      if (res.data && res.data.available) {
         slugStatus.value = 'available'
       } else {
         slugStatus.value = 'taken'
       }
-    } catch (_e: unknown) {
+    } else {
       slugStatus.value = 'idle'
     }
   }
@@ -133,14 +134,17 @@ export function useStorefront() {
    */
   async function fetchPublicStorefront(slug: string): Promise<{ success: boolean, data?: { storefront: Storefront, products: (StorefrontProduct & { products?: Product })[], categories: Category[] }, error?: string }> {
     loading.value = true
-    try {
-      const data = await apiFetch<{
-        storefront: Storefront
-        categories: Category[]
-        featured_products: StorefrontProduct[]
-        catalog: StorefrontProduct[]
-      }>(`/api/public/store/${slug}`)
+    const res = await apiFetch<{
+      storefront: Storefront
+      categories: Category[]
+      featured_products: StorefrontProduct[]
+      catalog: StorefrontProduct[]
+    }>(`/api/public/store/${slug}`)
 
+    loading.value = false
+
+    if (res.success) {
+      const data = res.data
       if (!data) return { success: false, error: 'Data tidak ditemukan' }
 
       return {
@@ -151,10 +155,8 @@ export function useStorefront() {
           categories: data.categories || []
         }
       }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
-    } finally {
-      loading.value = false
+    } else {
+      return { success: false, error: res.error }
     }
   }
 
@@ -170,35 +172,31 @@ export function useStorefront() {
     status?: string
     slug?: string
   }): Promise<{ success: boolean, data?: OnlineOrder, error?: string }> {
-    try {
-      const slug = payload.slug || storefront.value.slug
-      const data = await apiFetch<OnlineOrder>(`/api/public/store/${slug}/order`, {
-        method: 'POST',
-        body: {
-          customer_name: payload.customer_name,
-          customer_phone: payload.customer_phone,
-          total_amount: payload.total_amount,
-          notes: payload.notes
-        }
-      })
-      return { success: true, data }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
+    const slug = payload.slug || storefront.value.slug
+    const res = await apiFetch<OnlineOrder>(`/api/public/store/${slug}/order`, {
+      method: 'POST',
+      body: {
+        customer_name: payload.customer_name,
+        customer_phone: payload.customer_phone,
+        total_amount: payload.total_amount,
+        notes: payload.notes
+      }
+    })
+    
+    if (res.success) {
+      return { success: true, data: res.data }
     }
+    return { success: false, error: res.error }
   }
 
   /**
    * Track anonymous storefront analytics events
    */
   async function trackStorefrontEvent(slugStr: string, eventType: 'page_view' | 'whatsapp_click') {
-    try {
-      await apiFetch(`/api/public/store/${slugStr}/track`, {
-        method: 'POST',
-        body: { event_type: eventType }
-      })
-    } catch (_e: unknown) {
-      // Silently fail analytics tracking
-    }
+    await apiFetch(`/api/public/store/${slugStr}/track`, {
+      method: 'POST',
+      body: { event_type: eventType }
+    })
   }
 
   /**

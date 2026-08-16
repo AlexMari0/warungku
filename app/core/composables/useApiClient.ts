@@ -14,7 +14,7 @@ export function useApiClient() {
   async function apiFetch<T>(
     path: string,
     options: NitroFetchOptions<NitroFetchRequest> = {}
-  ): Promise<T> {
+  ): Promise<{ success: true; data: T } | { success: false; error: string }> {
     const headers: Record<string, string> = {
       ...(options.headers as Record<string, string> || {})
     }
@@ -35,18 +35,19 @@ export function useApiClient() {
     }
 
     try {
-      return await $fetch<T>(path, {
+      const data = await $fetch<T>(path, {
         baseURL,
         ...options,
         headers
       })
+      return { success: true, data }
     } catch (err: unknown) {
       // Format Go backend API error
       const fetchError = err as { data?: { code?: string; message?: string; details?: unknown }; message?: string }
       if (fetchError.data && fetchError.data.message) {
-        throw new Error(fetchError.data.message)
+        return { success: false, error: fetchError.data.message }
       }
-      throw err
+      return { success: false, error: fetchError.message || 'Terjadi kesalahan pada sistem.' }
     }
   }
 

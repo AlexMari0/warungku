@@ -17,15 +17,15 @@ export function useCategories() {
     }
 
     loading.value = true
-    try {
-      const data = await apiFetch<Category[]>('/api/categories')
-      categories.value = data || []
+    const res = await apiFetch<Category[]>('/api/categories')
+    loading.value = false
+
+    if (res.success) {
+      categories.value = res.data || []
       return { success: true, data: categories.value }
-    } catch (err: unknown) {
+    } else {
       categories.value = []
-      return { success: false, error: (err as Error).message }
-    } finally {
-      loading.value = false
+      return { success: false, error: res.error }
     }
   }
 
@@ -35,72 +35,66 @@ export function useCategories() {
   async function createCategory(payload: Pick<Category, 'name' | 'color'>): Promise<{ success: boolean, data?: Category, error?: string }> {
     if (!user.value) return { success: false, error: 'User not authenticated' }
 
-    try {
-      const nextSortOrder = categories.value.length + 1
-      const data = await apiFetch<Category>('/api/categories', {
-        method: 'POST',
-        body: {
-          ...payload,
-          sort_order: nextSortOrder
-        }
-      })
-
-      return { success: true, data }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
-    }
+    const nextSortOrder = categories.value.length + 1
+    return await apiFetch<Category>('/api/categories', {
+      method: 'POST',
+      body: {
+        ...payload,
+        sort_order: nextSortOrder
+      }
+    })
   }
 
   /**
    * Update an existing category
    */
   async function updateCategory(id: string, payload: Partial<Category>): Promise<{ success: boolean, error?: string }> {
-    try {
-      await apiFetch<Category>(`/api/categories/${id}`, {
-        method: 'PATCH',
-        body: payload
-      })
+    const res = await apiFetch<Category>(`/api/categories/${id}`, {
+      method: 'PATCH',
+      body: payload
+    })
 
+    if (res.success) {
       return { success: true }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
     }
+    return { success: false, error: res.error }
   }
 
   /**
    * Delete a category
    */
   async function deleteCategory(id: string): Promise<{ success: boolean, error?: string }> {
-    try {
-      await apiFetch(`/api/categories/${id}`, {
-        method: 'DELETE'
-      })
+    const res = await apiFetch(`/api/categories/${id}`, {
+      method: 'DELETE'
+    })
 
+    if (res.success) {
       categories.value = categories.value.filter(c => c.id !== id)
       return { success: true }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message || 'Kategori ini mungkin sedang digunakan oleh produk.' }
     }
+    // Custom error overriding default apiFetch message if needed, but apiFetch has it
+    return { success: false, error: res.error || 'Kategori ini mungkin sedang digunakan oleh produk.' }
   }
 
   /**
    * Reorder category sort orders
    */
   async function reorderCategories(orderedIds: string[]): Promise<{ success: boolean, error?: string }> {
-    try {
-      const updates = orderedIds.map((id, index) =>
-        apiFetch(`/api/categories/${id}`, {
-          method: 'PATCH',
-          body: { sort_order: index + 1 }
-        })
-      )
+    const updates = orderedIds.map((id, index) =>
+      apiFetch(`/api/categories/${id}`, {
+        method: 'PATCH',
+        body: { sort_order: index + 1 }
+      })
+    )
 
-      await Promise.all(updates)
-      await fetchCategories()
-      return { success: true }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
+    const results = await Promise.all(updates)
+    const failed = results.find(r => !r.success)
+    if (failed) {
+      return { success: false, error: failed.error }
     }
+    
+    await fetchCategories()
+    return { success: true }
   }
 
   return {

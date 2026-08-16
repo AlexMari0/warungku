@@ -73,21 +73,24 @@ export function useReports() {
     if (!user.value) return { success: false, error: 'User not authenticated' }
 
     loading.value = true
-    try {
-      const data = await apiFetch<{
-        summary: Partial<DailySummary> & { avg_transaction?: number }
-        summary_comparison: SummaryComparison
-        hourly_traffic: HourlyTraffic[]
-        product_sales: ProductSalesSummary[]
-        payment_summaries: PaymentMethodSummary[]
-      }>('/api/reports/dashboard', {
-        query: {
-          period,
-          start_date: customStart,
-          end_date: customEnd
-        }
-      })
+    const res = await apiFetch<{
+      summary: Partial<DailySummary> & { avg_transaction?: number }
+      summary_comparison: SummaryComparison
+      hourly_traffic: HourlyTraffic[]
+      product_sales: ProductSalesSummary[]
+      payment_summaries: PaymentMethodSummary[]
+    }>('/api/reports/dashboard', {
+      query: {
+        period,
+        start_date: customStart,
+        end_date: customEnd
+      }
+    })
 
+    loading.value = false
+
+    if (res.success) {
+      const data = res.data
       if (data) {
         summary.value = data.summary
         summaryComparison.value = data.summary_comparison || {
@@ -104,10 +107,8 @@ export function useReports() {
         paymentSummaries.value = data.payment_summaries || []
       }
       return { success: true }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
-    } finally {
-      loading.value = false
+    } else {
+      return { success: false, error: res.error }
     }
   }
 
@@ -118,19 +119,20 @@ export function useReports() {
     if (!user.value) return { success: false, error: 'User not authenticated' }
     loading.value = true
 
-    try {
-      const data = await apiFetch<{
-        product_sales: ProductSalesSummary[]
-      }>('/api/reports/dashboard', {
-        query: { period: periodStr }
-      })
-      productSales.value = data?.product_sales || []
+    const res = await apiFetch<{
+      product_sales: ProductSalesSummary[]
+    }>('/api/reports/dashboard', {
+      query: { period: periodStr }
+    })
+    
+    loading.value = false
+    
+    if (res.success) {
+      productSales.value = res.data?.product_sales || []
       return { success: true, data: productSales.value }
-    } catch (err: unknown) {
+    } else {
       productSales.value = []
-      return { success: false, error: (err as Error).message }
-    } finally {
-      loading.value = false
+      return { success: false, error: res.error }
     }
   }
 
@@ -141,19 +143,20 @@ export function useReports() {
     if (!user.value) return { success: false, error: 'User not authenticated' }
     loading.value = true
 
-    try {
-      const data = await apiFetch<{
-        payment_summaries: PaymentMethodSummary[]
-      }>('/api/reports/dashboard', {
-        query: { period: periodStr }
-      })
-      paymentSummaries.value = data?.payment_summaries || []
+    const res = await apiFetch<{
+      payment_summaries: PaymentMethodSummary[]
+    }>('/api/reports/dashboard', {
+      query: { period: periodStr }
+    })
+    
+    loading.value = false
+    
+    if (res.success) {
+      paymentSummaries.value = res.data?.payment_summaries || []
       return { success: true, data: paymentSummaries.value }
-    } catch (err: unknown) {
+    } else {
       paymentSummaries.value = []
-      return { success: false, error: (err as Error).message }
-    } finally {
-      loading.value = false
+      return { success: false, error: res.error }
     }
   }
 
@@ -164,16 +167,15 @@ export function useReports() {
     if (!user.value) return { success: false, error: 'User not authenticated' }
     const targetDate = dateStr || new Date().toISOString().split('T')[0]
 
-    try {
-      await apiFetch('/api/reports/refresh', {
-        method: 'POST',
-        body: { date: targetDate }
-      })
+    const res = await apiFetch('/api/reports/refresh', {
+      method: 'POST',
+      body: { date: targetDate }
+    })
 
+    if (res.success) {
       return { success: true }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
     }
+    return { success: false, error: res.error }
   }
 
   /**
@@ -182,42 +184,43 @@ export function useReports() {
   async function fetchTopProducts(startDate: string, endDate: string): Promise<{ success: boolean, data?: TopProductItem[], error?: string }> {
     if (!user.value) return { success: false, error: 'User not authenticated' }
 
-    try {
-      const data = await apiFetch<{
-        product_sales?: ProductSalesSummary[]
-      }>('/api/reports/dashboard', {
-        query: { start_date: startDate, end_date: endDate }
-      })
+    const res = await apiFetch<{
+      product_sales?: ProductSalesSummary[]
+    }>('/api/reports/dashboard', {
+      query: { start_date: startDate, end_date: endDate }
+    })
 
-      const prodSalesData = data?.product_sales || []
-      const prodMap: Record<string, TopProductItem> = {}
-
-      for (const row of prodSalesData) {
-        const pid = row.product_id
-        if (!prodMap[pid]) {
-          prodMap[pid] = {
-            name: row.name || 'Unknown Product',
-            sku: row.sku || '-',
-            category: row.category || 'Umum',
-            color: row.color || '#9ca3af',
-            qty: 0,
-            revenue: 0,
-            profit: 0
-          }
-        }
-        prodMap[pid].qty += (row.quantity_sold || 0)
-        prodMap[pid].revenue += (Number(row.revenue) || 0)
-        prodMap[pid].profit += (Number(row.gross_profit) || 0)
-      }
-
-      const topProducts = Object.values(prodMap)
-        .sort((a, b) => b.qty - a.qty)
-        .slice(0, 5)
-
-      return { success: true, data: topProducts }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
+    if (!res.success) {
+      return { success: false, error: res.error }
     }
+
+    const data = res.data
+    const prodSalesData = data?.product_sales || []
+    const prodMap: Record<string, TopProductItem> = {}
+
+    for (const row of prodSalesData) {
+      const pid = row.product_id
+      if (!prodMap[pid]) {
+        prodMap[pid] = {
+          name: row.name || 'Unknown Product',
+          sku: row.sku || '-',
+          category: row.category || 'Umum',
+          color: row.color || '#9ca3af',
+          qty: 0,
+          revenue: 0,
+          profit: 0
+        }
+      }
+      prodMap[pid].qty += (row.quantity_sold || 0)
+      prodMap[pid].revenue += (Number(row.revenue) || 0)
+      prodMap[pid].profit += (Number(row.gross_profit) || 0)
+    }
+
+    const topProducts = Object.values(prodMap)
+      .sort((a, b) => b.qty - a.qty)
+      .slice(0, 5)
+
+    return { success: true, data: topProducts }
   }
 
   return {

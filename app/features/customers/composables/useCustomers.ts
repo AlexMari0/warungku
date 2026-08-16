@@ -17,15 +17,15 @@ export function useCustomers() {
     }
 
     loading.value = true
-    try {
-      const data = await apiFetch<Customer[]>('/api/customers')
-      customers.value = data || []
+    const res = await apiFetch<Customer[]>('/api/customers')
+    loading.value = false
+
+    if (res.success) {
+      customers.value = res.data || []
       return { success: true, data: customers.value }
-    } catch (err: unknown) {
+    } else {
       customers.value = []
-      return { success: false, error: (err as Error).message }
-    } finally {
-      loading.value = false
+      return { success: false, error: res.error }
     }
   }
 
@@ -35,17 +35,16 @@ export function useCustomers() {
   async function createCustomer(payload: { name: string; phone?: string; email?: string }): Promise<{ success: boolean, data?: Customer, error?: string }> {
     if (!user.value) return { success: false, error: 'User not authenticated' }
 
-    try {
-      const data = await apiFetch<Customer>('/api/customers', {
-        method: 'POST',
-        body: payload
-      })
+    const res = await apiFetch<Customer>('/api/customers', {
+      method: 'POST',
+      body: payload
+    })
 
-      customers.value.unshift(data)
-      return { success: true, data }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
+    if (res.success) {
+      if (res.data) customers.value.unshift(res.data)
+      return { success: true, data: res.data }
     }
+    return { success: false, error: res.error }
   }
 
   return {

@@ -25,19 +25,19 @@ export function useAICoach() {
     }
 
     loadingSessions.value = true
-    try {
-      const data = await apiFetch<AISession[]>('/api/ai/sessions')
-      sessions.value = data || []
+    const res = await apiFetch<AISession[]>('/api/ai/sessions')
+    loadingSessions.value = false
+
+    if (res.success) {
+      sessions.value = res.data || []
 
       if (sessions.value.length > 0 && !activeSessionId.value) {
         activeSessionId.value = sessions.value[0]?.id || null
       }
       return { success: true, data: sessions.value }
-    } catch (err: unknown) {
+    } else {
       sessions.value = []
-      return { success: false, error: (err as Error).message }
-    } finally {
-      loadingSessions.value = false
+      return { success: false, error: res.error }
     }
   }
 
@@ -48,21 +48,18 @@ export function useAICoach() {
     if (!user.value) return { success: false, error: 'User not authenticated' }
     const newTitle = customTitle || `Analisis Baru #${sessions.value.length + 1}`
 
-    try {
-      const data = await apiFetch<AISession>('/api/ai/sessions', {
-        method: 'POST',
-        body: { title: newTitle }
-      })
+    const res = await apiFetch<AISession>('/api/ai/sessions', {
+      method: 'POST',
+      body: { title: newTitle }
+    })
 
-      if (data) {
-        sessions.value = [data, ...sessions.value]
-        activeSessionId.value = data.id
-        messages.value = []
-        return { success: true, data }
-      }
-      return { success: false, error: 'Gagal membuat sesi' }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
+    if (res.success) {
+      sessions.value = [res.data, ...sessions.value]
+      activeSessionId.value = res.data.id
+      messages.value = []
+      return { success: true, data: res.data }
+    } else {
+      return { success: false, error: res.error || 'Gagal membuat sesi' }
     }
   }
 
@@ -72,36 +69,31 @@ export function useAICoach() {
   async function renameSession(id: string, newTitle: string): Promise<{ success: boolean, error?: string }> {
     if (!newTitle.trim()) return { success: false, error: 'Nama sesi tidak boleh kosong' }
 
-    try {
-      const idx = sessions.value.findIndex(s => s.id === id)
-      if (idx !== -1 && sessions.value[idx]) {
-        sessions.value[idx]!.title = newTitle.trim()
-      }
-
-      return { success: true }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
+    const idx = sessions.value.findIndex(s => s.id === id)
+    if (idx !== -1 && sessions.value[idx]) {
+      sessions.value[idx]!.title = newTitle.trim()
     }
+    // Rename implies UI-side or should we patch API too? Wait, the original code didn't call apiFetch here! It only modified local state?
+    // Wait, the original try block has no apiFetch!
+    return { success: true }
   }
 
   /**
    * Delete a session and its associated logs
    */
   async function deleteSession(id: string): Promise<{ success: boolean, error?: string }> {
-    try {
-      await apiFetch(`/api/ai/sessions/${id}`, {
-        method: 'DELETE'
-      })
+    const res = await apiFetch(`/api/ai/sessions/${id}`, {
+      method: 'DELETE'
+    })
 
+    if (res.success) {
       sessions.value = sessions.value.filter(s => s.id !== id)
       if (activeSessionId.value === id) {
         activeSessionId.value = sessions.value.length > 0 ? (sessions.value[0]?.id || null) : null
       }
-
       return { success: true }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
     }
+    return { success: false, error: res.error }
   }
 
   /**
@@ -110,18 +102,20 @@ export function useAICoach() {
   async function fetchMessages(sessId: string): Promise<{ success: boolean, data?: AIMessageUI[], error?: string }> {
     loadingMessages.value = true
 
-    try {
-      const data = await apiFetch<Array<{
-        id: string
-        session_id: string
-        query_text: string
-        response_text: string
-        query_type: string
-        created_at: string
-        rating?: string
-      }>>(`/api/ai/sessions/${sessId}/messages`)
+    const res = await apiFetch<Array<{
+      id: string
+      session_id: string
+      query_text: string
+      response_text: string
+      query_type: string
+      created_at: string
+      rating?: string
+    }>>(`/api/ai/sessions/${sessId}/messages`)
 
-      const formatted: AIMessageUI[] = (data || []).map(d => ({
+    loadingMessages.value = false
+
+    if (res.success) {
+      const formatted: AIMessageUI[] = (res.data || []).map(d => ({
         id: d.id,
         query_text: d.query_text,
         response_text: d.response_text,
@@ -132,11 +126,9 @@ export function useAICoach() {
 
       messages.value = formatted
       return { success: true, data: formatted }
-    } catch (err: unknown) {
+    } else {
       messages.value = []
-      return { success: false, error: (err as Error).message }
-    } finally {
-      loadingMessages.value = false
+      return { success: false, error: res.error }
     }
   }
 
@@ -175,32 +167,35 @@ export function useAICoach() {
     messages.value.push(userMsg)
     onSuccess?.()
 
-    try {
-      const res = await apiFetch<{
-        success: boolean
-        message: {
-          id: string
-          query_text: string
-          response_text: string
-          query_type: string
-          created_at: string
-        }
-      }>('/api/ai/chat', {
-        method: 'POST',
-        body: {
-          query_text: finalPrompt,
-          session_id: currentSessId,
-          query_type: queryType
-        }
-      })
+    const res = await apiFetch<{
+      success: boolean
+      message: {
+        id: string
+        query_text: string
+        response_text: string
+        query_type: string
+        created_at: string
+      }
+    }>('/api/ai/chat', {
+      method: 'POST',
+      body: {
+        query_text: finalPrompt,
+        session_id: currentSessId,
+        query_type: queryType
+      }
+    })
 
-      if (res && res.success) {
+    sendingMessage.value = false
+    onSuccess?.()
+
+    if (res.success) {
+      if (res.data.success) {
         const finalMsg: AIMessageUI = {
-          id: res.message.id,
-          query_text: res.message.query_text,
-          response_text: res.message.response_text,
-          query_type: res.message.query_type as any,
-          created_at: res.message.created_at
+          id: res.data.message.id,
+          query_text: res.data.message.query_text,
+          response_text: res.data.message.response_text,
+          query_type: res.data.message.query_type as any,
+          created_at: res.data.message.created_at
         }
 
         const tempIdx = messages.value.findIndex(m => m.id === userMsgId)
@@ -208,18 +203,21 @@ export function useAICoach() {
           messages.value[tempIdx] = finalMsg
         }
         return { success: true, data: finalMsg }
+      } else {
+        const tempIdx = messages.value.findIndex(m => m.id === userMsgId)
+        if (tempIdx !== -1 && messages.value[tempIdx]) {
+          messages.value[tempIdx]!.failed = true
+          messages.value[tempIdx]!.error_text = 'Gagal mendapatkan balasan dari AI'
+        }
+        return { success: false, error: 'Gagal mendapatkan balasan dari AI' }
       }
-      return { success: false, error: 'Gagal mendapatkan balasan dari AI' }
-    } catch (err: unknown) {
+    } else {
       const tempIdx = messages.value.findIndex(m => m.id === userMsgId)
       if (tempIdx !== -1 && messages.value[tempIdx]) {
         messages.value[tempIdx]!.failed = true
-        messages.value[tempIdx]!.error_text = (err as Error).message || 'Koneksi terputus. Silakan coba lagi.'
+        messages.value[tempIdx]!.error_text = res.error || 'Gagal mendapatkan balasan dari AI'
       }
-      return { success: false, error: (err as Error).message }
-    } finally {
-      sendingMessage.value = false
-      onSuccess?.()
+      return { success: false, error: res.error || 'Gagal mendapatkan balasan dari AI' }
     }
   }
 
@@ -235,21 +233,20 @@ export function useAICoach() {
    * Submit helpful/not_helpful rating feedback for an AI response
    */
   async function rateResponse(message: AIMessageUI, rating: 'helpful' | 'not_helpful'): Promise<{ success: boolean, error?: string }> {
-    try {
-      await apiFetch('/api/ai/feedback', {
-        method: 'POST',
-        body: {
-          query_log_id: message.id,
-          rating: rating,
-          feedback_text: 'Disubmit melalui UI dashboard'
-        }
-      })
+    const res = await apiFetch('/api/ai/feedback', {
+      method: 'POST',
+      body: {
+        query_log_id: message.id,
+        rating: rating,
+        feedback_text: 'Disubmit melalui UI dashboard'
+      }
+    })
 
+    if (res.success) {
       message.rating = rating
       return { success: true }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
     }
+    return { success: false, error: res.error }
   }
 
   return {

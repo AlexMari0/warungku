@@ -52,22 +52,22 @@ export function useStockMovements() {
     loading.value = movements.value.length === 0
     serverLoading.value = movements.value.length > 0
 
-    try {
-      const data = await apiFetch<StockMovement[]>('/api/stock-movements', {
-        query: {
-          type: filterType.value && filterType.value !== 'all' ? filterType.value : undefined,
-          limit: 100
-        }
-      })
+    const res = await apiFetch<StockMovement[]>('/api/stock-movements', {
+      query: {
+        type: filterType.value && filterType.value !== 'all' ? filterType.value : undefined,
+        limit: 100
+      }
+    })
 
-      movements.value = data || []
+    loading.value = false
+    serverLoading.value = false
+
+    if (res.success) {
+      movements.value = res.data || []
       totalLiveCount.value = movements.value.length
       return { success: true, data: movements.value }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
-    } finally {
-      loading.value = false
-      serverLoading.value = false
+    } else {
+      return { success: false, error: res.error }
     }
   }
 

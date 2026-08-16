@@ -23,22 +23,21 @@ export function useProducts() {
     }
 
     loading.value = true
-    try {
-      const data = await apiFetch<Product[]>('/api/products', {
-        query: {
-          active_only: options?.activeOnly ? 'true' : 'false',
-          order_by: options?.orderBy || 'created_at',
-          order_asc: options?.orderAscending ? 'true' : 'false'
-        }
-      })
+    const res = await apiFetch<Product[]>('/api/products', {
+      query: {
+        active_only: options?.activeOnly ? 'true' : 'false',
+        order_by: options?.orderBy || 'created_at',
+        order_asc: options?.orderAscending ? 'true' : 'false'
+      }
+    })
 
-      products.value = data || []
+    loading.value = false
+    if (res.success) {
+      products.value = res.data || []
       return { success: true, data: products.value }
-    } catch (err: unknown) {
+    } else {
       products.value = []
-      return { success: false, error: (err as Error).message || 'Terjadi kesalahan pada server database.' }
-    } finally {
-      loading.value = false
+      return { success: false, error: res.error }
     }
   }
 
@@ -48,69 +47,59 @@ export function useProducts() {
   async function createProduct(payload: Partial<Product>): Promise<{ success: boolean, data?: Product, error?: string }> {
     if (!user.value) return { success: false, error: 'User not authenticated' }
 
-    try {
-      const data = await apiFetch<Product>('/api/products', {
-        method: 'POST',
-        body: payload
-      })
-
-      return { success: true, data }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message || 'Periksa data input Anda.' }
-    }
+    return await apiFetch<Product>('/api/products', {
+      method: 'POST',
+      body: payload
+    })
   }
 
   /**
    * Update an existing product
    */
   async function updateProduct(id: string, payload: Partial<Product>): Promise<{ success: boolean, error?: string }> {
-    try {
-      await apiFetch<Product>(`/api/products/${id}`, {
-        method: 'PATCH',
-        body: payload
-      })
-
+    const res = await apiFetch<Product>(`/api/products/${id}`, {
+      method: 'PATCH',
+      body: payload
+    })
+    
+    if (res.success) {
       return { success: true }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
     }
+    return { success: false, error: res.error }
   }
 
   /**
    * Soft delete or hard delete product
    */
   async function deleteProduct(id: string): Promise<{ success: boolean, error?: string }> {
-    try {
-      await apiFetch(`/api/products/${id}`, {
-        method: 'DELETE'
-      })
+    const res = await apiFetch(`/api/products/${id}`, {
+      method: 'DELETE'
+    })
 
+    if (res.success) {
       products.value = products.value.filter(p => p.id !== id)
       return { success: true }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
     }
+    return { success: false, error: res.error }
   }
 
   /**
    * Toggle product active status
    */
   async function toggleProductActive(id: string, status: boolean): Promise<{ success: boolean, error?: string }> {
-    try {
-      await apiFetch(`/api/products/${id}/toggle`, {
-        method: 'PATCH',
-        body: { is_active: status }
-      })
+    const res = await apiFetch(`/api/products/${id}/toggle`, {
+      method: 'PATCH',
+      body: { is_active: status }
+    })
 
+    if (res.success) {
       const found = products.value.find(p => p.id === id)
       if (found) {
         found.is_active = status
       }
-
       return { success: true }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
     }
+    return { success: false, error: res.error }
   }
 
   /**
@@ -118,12 +107,11 @@ export function useProducts() {
    */
   async function fetchSalesFrequency(): Promise<Record<string, number>> {
     if (!user.value) return {}
-    try {
-      const data = await apiFetch<Record<string, number>>('/api/products/sales-frequency')
-      return data || {}
-    } catch (_err: unknown) {
-      return {}
+    const res = await apiFetch<Record<string, number>>('/api/products/sales-frequency')
+    if (res.success) {
+      return res.data || {}
     }
+    return {}
   }
 
   return {

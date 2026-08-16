@@ -35,32 +35,35 @@ export function useCheckout() {
     if (!user.value) return { success: false, error: 'User not authenticated' }
     processingCheckout.value = true
 
-    try {
-      const itemsPayload = cart.map(item => ({
-        product_id: item.product_id,
-        quantity: item.quantity,
-        discount: item.discount
-      }))
+    const itemsPayload = cart.map(item => ({
+      product_id: item.product_id,
+      quantity: item.quantity,
+      discount: item.discount
+    }))
 
-      const checkoutResult = await apiFetch<{
-        order: Order
-        items: any[]
-        payment: any
-        receipt: any
-        customer: any
-        points_earned: number
-      }>('/api/checkout', {
-        method: 'POST',
-        body: {
-          items: itemsPayload,
-          payment_method: paymentMethod,
-          paid_amount: payAmount,
-          customer_id: selectedCustomerId && selectedCustomerId !== 'general' ? selectedCustomerId : null,
-          discount_amount: discountAmount,
-          notes: orderNotes || null
-        }
-      })
+    const res = await apiFetch<{
+      order: Order
+      items: any[]
+      payment: any
+      receipt: any
+      customer: any
+      points_earned: number
+    }>('/api/checkout', {
+      method: 'POST',
+      body: {
+        items: itemsPayload,
+        payment_method: paymentMethod,
+        paid_amount: payAmount,
+        customer_id: selectedCustomerId && selectedCustomerId !== 'general' ? selectedCustomerId : null,
+        discount_amount: discountAmount,
+        notes: orderNotes || null
+      }
+    })
 
+    processingCheckout.value = false
+
+    if (res.success) {
+      const checkoutResult = res.data
       const orderFromDb = checkoutResult.order
       const itemsFromDb = checkoutResult.items || []
       const paymentFromDb = checkoutResult.payment || null
@@ -74,10 +77,8 @@ export function useCheckout() {
       }
 
       return { success: true, data: fullOrder }
-    } catch (err: unknown) {
-      return { success: false, error: (err as Error).message }
-    } finally {
-      processingCheckout.value = false
+    } else {
+      return { success: false, error: res.error }
     }
   }
 
