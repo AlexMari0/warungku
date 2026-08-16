@@ -7,6 +7,7 @@ definePageMeta({
 })
 
 const supabase = useSupabaseClient()
+const user = useSupabaseUser()
 const toast = useToast()
 
 const fields: AuthFormField[] = [{
@@ -42,13 +43,30 @@ async function onSubmit(payload: FormSubmitEvent<Schema>) {
 
     if (error) throw error
 
+    // Wait for the user state to sync to avoid middleware intercepting
+    if (!user.value) {
+      await new Promise<void>((resolve) => {
+        const unwatch = watch(user, (newUser) => {
+          if (newUser) {
+            unwatch()
+            resolve()
+          }
+        })
+        // Timeout fallback
+        setTimeout(() => {
+          unwatch()
+          resolve()
+        }, 2000)
+      })
+    }
+
     toast.add({
       title: 'Selamat datang kembali!',
       description: 'Berhasil masuk ke WarungKu.',
       color: 'success'
     })
 
-    await navigateTo('/')
+    await navigateTo('/', { replace: true })
   } catch (error: unknown) {
     toast.add({
       title: 'Gagal masuk',

@@ -108,18 +108,18 @@ onMounted(() => {
       class="flex flex-col gap-8"
     >
       <!-- KPI & Storefront Cards -->
-      <ReportsRevenueCards
+      <RevenueCards
         :summary="summary"
         :summary-comparison="summaryComparison"
       />
 
       <!-- Hourly Traffic Chart -->
-      <ReportsTrafficChart
+      <TrafficChart
         :hourly-traffic="hourlyTraffic"
       />
 
       <!-- Top Products Bento Table -->
-      <ReportsTopProductsList
+      <TopProductsList
         :top-products="topProducts"
       />
     </div>

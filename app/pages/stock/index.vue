@@ -159,10 +159,10 @@ onMounted(() => {
     </div>
 
     <!-- 1. Statistics Cards Bento Grid -->
-    <StockStatsGrid :stats="stats" />
+    <StatsGrid :stats="stats" />
 
     <!-- 2. Product Table with Filtering and Pagination -->
-    <StockProductTable
+    <ProductTable
       :products="products"
       :categories="categories"
       :loading="productsLoading"
@@ -219,7 +219,7 @@ onMounted(() => {
     </UModal>
 
     <!-- 3. Product Add/Edit Dialog -->
-    <StockProductFormModal
+    <ProductFormModal
       v-model:open="isProductModalOpen"
       :editing-product="editingProduct"
       :categories="categories"

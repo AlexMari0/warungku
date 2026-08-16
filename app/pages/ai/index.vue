@@ -111,7 +111,7 @@ onMounted(() => {
           class="flex-grow overflow-y-auto p-4 md:p-6 flex flex-col gap-6 no-scrollbar"
         >
           <!-- Welcome Screen (Zero message state) -->
-          <AiPromptPresetsGrid
+          <PromptPresetsGrid
             v-if="messages.length === 0"
             @select-preset="sendMessage"
           />
@@ -121,7 +121,7 @@ onMounted(() => {
             v-else
             class="flex flex-col gap-6"
           >
-            <AiChatMessageBubble
+            <ChatMessageBubble
               v-for="(msg, index) in messages"
               :key="msg.id"
               :message="msg"
@@ -164,7 +164,7 @@ onMounted(() => {
     </div>
 
     <!-- Session History & Rename Modals -->
-    <AiSessionSidebar
+    <SessionSidebar
       v-model:is-open="isHistoryModalOpen"
       :sessions="sessions"
       :active-session-id="activeSessionId"

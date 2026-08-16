@@ -46,10 +46,10 @@ onMounted(() => {
     </div>
 
     <!-- 1. Stats Cards Row -->
-    <StockMovementStats :stats="stats" />
+    <MovementStats :stats="stats" />
 
     <!-- 2. Controls Toolbar -->
-    <StockMovementFilters
+    <MovementFilters
       v-model:search-product="searchProduct"
       v-model:filter-type="filterType"
       v-model:start-date="startDate"
@@ -59,7 +59,7 @@ onMounted(() => {
     />
 
     <!-- 3. Table Ledger -->
-    <StockMovementTable
+    <MovementTable
       v-model:current-page="currentPage"
       :movements="paginatedMovements"
       :loading="loading"

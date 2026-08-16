@@ -135,7 +135,7 @@ onMounted(() => {
 <template>
   <div class="flex flex-col xl:flex-row gap-6 max-w-[1600px] mx-auto w-full h-[calc(100vh-130px)] min-h-[500px]">
     <!-- LEFT PANEL: Product Grid & Catalog Navigation -->
-    <PosProductCatalog
+    <ProductCatalog
       :products="products"
       :categories="categories"
       :loading="loading"
@@ -144,7 +144,7 @@ onMounted(() => {
 
     <!-- RIGHT PANEL: Shopping Cart Register & Checkout -->
     <div class="w-full xl:w-[460px] shrink-0 bg-elevated rounded-3xl border border-default shadow-sm overflow-hidden flex flex-col p-6 gap-5 h-full">
-      <PosCartPanel
+      <CartPanel
         :cart="cart"
         :total-count="totalCartItemsCount"
         :best-sellers="bestSellers"
@@ -155,7 +155,7 @@ onMounted(() => {
         @add-to-cart="addToCart"
       />
 
-      <PosCheckoutSummary
+      <CheckoutSummary
         v-model:discount-type="discountType"
         v-model:discount-value="discountValue"
         v-model:payment-method="paymentMethod"

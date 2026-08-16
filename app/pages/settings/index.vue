@@ -205,7 +205,7 @@ onMounted(() => {
     <div v-else-if="activeTab === 'storefront'" class="grid grid-cols-1 lg:grid-cols-3 gap-10">
       <!-- LEFT ASYMMETRIC COLUMN: LIVE PREVIEW PHONE MOCKUP -->
       <div class="lg:col-span-1">
-        <SettingsPhonePreview
+        <PhonePreview
           :storefront="storefront"
           :storefront-products-map="storefrontProductsMap"
           :products="products"
@@ -215,7 +215,7 @@ onMounted(() => {
 
       <!-- RIGHT COLUMN: CONFIGURATION AND PRODUCT LINKER (col-span-2) -->
       <div class="lg:col-span-2 space-y-8">
-        <SettingsStorefrontEditor
+        <StorefrontEditor
           :storefront="storefront"
           :slug-status="slugStatus"
           :slug-error-message="slugErrorMessage"
@@ -223,7 +223,7 @@ onMounted(() => {
           @slug-input="onSlugInput"
         />
 
-        <SettingsProductLinker
+        <ProductLinker
           :products="products"
           :categories="categories"
           :storefront-products-map="storefrontProductsMap"
