@@ -15,6 +15,7 @@ const emit = defineEmits<{
 }>()
 
 const { createProduct, updateProduct } = useProducts()
+const toast = useToast()
 
 const submitting = ref(false)
 
@@ -96,11 +97,34 @@ async function onSubmit(event: FormSubmitEvent<ProductSchema>) {
 
   try {
     if (props.editingProduct) {
-      const success = await updateProduct(props.editingProduct.id, payload)
-      if (!success) return
+      const result = await updateProduct(props.editingProduct.id, payload)
+      if (!result.success) {
+        toast.add({
+          title: 'Gagal memperbarui produk',
+          description: result.error || 'Terjadi kesalahan.',
+          color: 'error'
+        })
+        return
+      }
+      toast.add({
+        title: 'Produk berhasil diperbarui',
+        color: 'success'
+      })
     } else {
-      const created = await createProduct(payload)
-      if (!created) return
+      const result = await createProduct(payload)
+      if (!result.success) {
+        toast.add({
+          title: 'Gagal menambah produk',
+          description: result.error || 'Terjadi kesalahan.',
+          color: 'error'
+        })
+        return
+      }
+      toast.add({
+        title: 'Produk berhasil ditambahkan',
+        description: `Produk "${payload.name}" siap dijual.`,
+        color: 'success'
+      })
     }
 
     emit('update:open', false)

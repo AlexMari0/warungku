@@ -13,7 +13,6 @@ export interface StorefrontProductLinkState {
 export function useStorefront() {
   const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
-  const toast = useToast()
 
   const storefront = ref<Storefront>({
     id: '',
@@ -35,8 +34,8 @@ export function useStorefront() {
   /**
    * Fetch or auto-initialize merchant storefront settings & product exposures
    */
-  async function fetchStorefrontSettings(_allProducts: Product[] = []) {
-    if (!user.value) return null
+  async function fetchStorefrontSettings(_allProducts: Product[] = []): Promise<{ success: boolean, data?: Storefront, error?: string }> {
+    if (!user.value) return { success: false, error: 'User not authenticated' }
     loading.value = true
 
     try {
@@ -50,14 +49,9 @@ export function useStorefront() {
         storefrontProductsMap.value = data.storefront_products_map || {}
       }
 
-      return storefront.value
+      return { success: true, data: storefront.value }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal memuat pengaturan toko',
-        description: (err as Error).message,
-        color: 'error'
-      })
-      return null
+      return { success: false, error: (err as Error).message }
     } finally {
       loading.value = false
     }
@@ -66,8 +60,8 @@ export function useStorefront() {
   /**
    * Save merchant storefront configuration and sync product exposure links
    */
-  async function saveSettings(): Promise<boolean> {
-    if (!user.value || !storefront.value.id) return false
+  async function saveSettings(): Promise<{ success: boolean, error?: string }> {
+    if (!user.value || !storefront.value.id) return { success: false, error: 'User not authenticated or storefront not loaded' }
     saving.value = true
 
     try {
@@ -100,20 +94,9 @@ export function useStorefront() {
         }
       }
 
-      toast.add({
-        title: 'Pengaturan Etalase Tersimpan',
-        description: 'Perubahan pada toko online Anda berhasil diperbarui.',
-        color: 'success'
-      })
-
-      return true
+      return { success: true }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal menyimpan pengaturan toko',
-        description: (err as Error).message,
-        color: 'error'
-      })
-      return false
+      return { success: false, error: (err as Error).message }
     } finally {
       saving.value = false
     }
@@ -148,7 +131,7 @@ export function useStorefront() {
   /**
    * Fetch public storefront details by slug for customer digital catalog page
    */
-  async function fetchPublicStorefront(slug: string) {
+  async function fetchPublicStorefront(slug: string): Promise<{ success: boolean, data?: { storefront: Storefront, products: (StorefrontProduct & { products?: Product })[], categories: Category[] }, error?: string }> {
     loading.value = true
     try {
       const data = await apiFetch<{
@@ -158,15 +141,18 @@ export function useStorefront() {
         catalog: StorefrontProduct[]
       }>(`/api/public/store/${slug}`)
 
-      if (!data) return null
+      if (!data) return { success: false, error: 'Data tidak ditemukan' }
 
       return {
-        storefront: data.storefront,
-        products: data.catalog as (StorefrontProduct & { products?: Product })[],
-        categories: data.categories || []
+        success: true,
+        data: {
+          storefront: data.storefront,
+          products: data.catalog as (StorefrontProduct & { products?: Product })[],
+          categories: data.categories || []
+        }
       }
-    } catch (_err: unknown) {
-      return null
+    } catch (err: unknown) {
+      return { success: false, error: (err as Error).message }
     } finally {
       loading.value = false
     }
@@ -183,7 +169,7 @@ export function useStorefront() {
     notes?: string
     status?: string
     slug?: string
-  }): Promise<OnlineOrder | null> {
+  }): Promise<{ success: boolean, data?: OnlineOrder, error?: string }> {
     try {
       const slug = payload.slug || storefront.value.slug
       const data = await apiFetch<OnlineOrder>(`/api/public/store/${slug}/order`, {
@@ -195,14 +181,9 @@ export function useStorefront() {
           notes: payload.notes
         }
       })
-      return data
+      return { success: true, data }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Checkout gagal',
-        description: (err as Error).message,
-        color: 'error'
-      })
-      return null
+      return { success: false, error: (err as Error).message }
     }
   }
 

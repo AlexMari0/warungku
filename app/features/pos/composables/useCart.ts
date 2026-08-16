@@ -1,32 +1,21 @@
 import type { CartItem, Product } from '~/core/types'
 
 export function useCart() {
-  const toast = useToast()
   const cart = ref<CartItem[]>([])
 
   /**
    * Add a product to the cart state with stock boundary validation
    */
-  function addToCart(product: Product): boolean {
+  function addToCart(product: Product): { success: boolean, error?: string } {
     if (!product.is_active || product.stock_qty <= 0) {
-      toast.add({
-        title: 'Barang tidak tersedia',
-        description: `Stok "${product.name}" habis. Silakan lakukan restock terlebih dahulu.`,
-        color: 'warning'
-      })
-      return false
+      return { success: false, error: `Stok "${product.name}" habis. Silakan lakukan restock terlebih dahulu.` }
     }
 
     const existing = cart.value.find(item => item.product_id === product.id)
 
     if (existing) {
       if (existing.quantity >= product.stock_qty) {
-        toast.add({
-          title: 'Batas stok tercapai',
-          description: `Tidak dapat menambah quantity melebihi sisa stok (${product.stock_qty} ${product.unit}).`,
-          color: 'warning'
-        })
-        return false
+        return { success: false, error: `Tidak dapat menambah quantity melebihi sisa stok (${product.stock_qty} ${product.unit}).` }
       }
       existing.quantity++
       existing.subtotal = existing.quantity * existing.unit_price - existing.discount
@@ -48,31 +37,19 @@ export function useCart() {
       })
     }
 
-    toast.add({
-      title: 'Ditambahkan ke keranjang',
-      description: `"${product.name}" berhasil dimasukkan.`,
-      color: 'success',
-      duration: 1000
-    })
-
-    return true
+    return { success: true }
   }
 
   /**
    * Increase quantity of a cart item
    */
-  function increaseQty(item: CartItem): boolean {
+  function increaseQty(item: CartItem): { success: boolean, error?: string } {
     if (item.quantity >= item.max_stock) {
-      toast.add({
-        title: 'Batas stok tercapai',
-        description: `Stok barang terbatas pada ${item.max_stock} ${item.unit}.`,
-        color: 'warning'
-      })
-      return false
+      return { success: false, error: `Stok barang terbatas pada ${item.max_stock} ${item.unit}.` }
     }
     item.quantity++
     item.subtotal = item.quantity * item.unit_price - item.discount
-    return true
+    return { success: true }
   }
 
   /**

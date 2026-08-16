@@ -19,6 +19,7 @@ const isOpen = computed({
 
 const { createCustomer } = useCustomers()
 const submittings = ref(false)
+const toast = useToast()
 const customerSchema = z.object({
   name: z.string().min(3, 'Nama pelanggan minimal 3 karakter'),
   phone: z.string().optional().or(z.literal(''))
@@ -39,15 +40,26 @@ function resetForm() {
 async function onSubmit(event: FormSubmitEvent<CustomerSchema>) {
   submittings.value = true
   try {
-    const created = await createCustomer({
+    const result = await createCustomer({
       name: event.data.name,
       phone: event.data.phone || undefined
     })
 
-    if (created) {
-      emit('saved', created)
+    if (result.success && result.data) {
+      toast.add({
+        title: 'Pelanggan ditambahkan',
+        description: `Pelanggan "${event.data.name}" berhasil terdaftar.`,
+        color: 'success'
+      })
+      emit('saved', result.data)
       isOpen.value = false
       resetForm()
+    } else {
+      toast.add({
+        title: 'Gagal menambah pelanggan',
+        description: result.error || 'Terjadi kesalahan.',
+        color: 'error'
+      })
     }
   } finally {
     submittings.value = false

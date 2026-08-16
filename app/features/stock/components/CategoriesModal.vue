@@ -20,6 +20,7 @@ const isOpen = computed({
 const user = useSupabaseUser()
 
 const { categories, loading, fetchCategories, createCategory, updateCategory, deleteCategory: performDeleteCategory } = useCategories()
+const toast = useToast()
 const submittings = ref(false)
 
 // Active category being edited (null = adding new)
@@ -81,13 +82,26 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     }
 
     if (editingCategory.value) {
-      await updateCategory(editingCategory.value.id, payload)
+      const result = await updateCategory(editingCategory.value.id, payload)
+      if (!result.success) {
+        toast.add({ title: 'Gagal memperbarui kategori', description: result.error || 'Terjadi kesalahan.', color: 'error' })
+        return
+      }
+      toast.add({ title: 'Kategori berhasil diperbarui', color: 'success' })
     } else {
-      await createCategory(payload)
+      const result = await createCategory(payload)
+      if (!result.success) {
+        toast.add({ title: 'Gagal membuat kategori', description: result.error || 'Terjadi kesalahan.', color: 'error' })
+        return
+      }
+      toast.add({ title: 'Kategori berhasil ditambahkan', description: `Kategori "${payload.name}" siap digunakan.`, color: 'success' })
     }
 
     resetForm()
-    await fetchCategories()
+    const fetchResult = await fetchCategories()
+    if (!fetchResult.success) {
+      toast.add({ title: 'Gagal memuat ulang kategori', description: fetchResult.error, color: 'error' })
+    }
     emit('saved')
   } finally {
     submittings.value = false
@@ -100,19 +114,25 @@ async function deleteCategory(id: string, name: string) {
     return
   }
 
-  const success = await performDeleteCategory(id)
-  if (success) {
+  const result = await performDeleteCategory(id)
+  if (result.success) {
     if (editingCategory.value?.id === id) {
       resetForm()
     }
+    toast.add({ title: 'Kategori dihapus', color: 'success' })
     emit('saved')
+  } else {
+    toast.add({ title: 'Gagal menghapus kategori', description: result.error || 'Terjadi kesalahan.', color: 'error' })
   }
 }
 
 // Fetch categories on open
 watch(isOpen, (newVal) => {
   if (newVal) {
-    fetchCategories().then(() => {
+    fetchCategories().then((result) => {
+      if (!result.success) {
+        toast.add({ title: 'Gagal memuat kategori', description: result.error, color: 'error' })
+      }
       state.sort_order = categories.value.length
     })
   }

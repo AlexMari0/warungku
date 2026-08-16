@@ -27,6 +27,23 @@ const storefrontProducts = ref<(StorefrontProduct & { products?: Product })[]>([
 const { cart, cartTotalCount, cartSubtotal, addToCart, removeFromCart, resetCart } = usePublicCart()
 const showCartDrawer = ref(false)
 
+function handleAddToCart(sfp: any) {
+  const result = addToCart(sfp)
+  if (result.success && result.data) {
+    toast.add({
+      title: 'Ditambahkan ke keranjang',
+      description: `${result.data.product.name} telah masuk ke dalam keranjang belanja.`,
+      color: 'success'
+    })
+  } else if (!result.success) {
+    toast.add({
+      title: 'Gagal menambah ke keranjang',
+      description: result.error || 'Terjadi kesalahan.',
+      color: 'warning'
+    })
+  }
+}
+
 // Filter & Search states
 const searchQuery = ref('')
 const selectedCategoryId = ref('')
@@ -44,25 +61,22 @@ const { fetchPublicStorefront, createOnlineOrder, trackStorefrontEvent, generate
 async function fetchStorefront() {
   loading.value = true
   storeNotFound.value = false
-  try {
-    const data = await fetchPublicStorefront(slug.value)
-    if (!data) {
-      storeNotFound.value = true
-      return
+  const result = await fetchPublicStorefront(slug.value)
+  if (!result.success || !result.data) {
+    storeNotFound.value = true
+    if (result.error && result.error !== 'Data tidak ditemukan') {
+      toast.add({
+        title: 'Gagal memuat toko',
+        description: result.error,
+        color: 'error'
+      })
     }
-
-    storeInfo.value = data.storefront
-    storefrontProducts.value = data.products
-    categories.value = data.categories
-  } catch (err: unknown) {
-    toast.add({
-      title: 'Gagal memuat toko',
-      description: (err as Error).message || 'Terjadi kesalahan.',
-      color: 'error'
-    })
-  } finally {
-    loading.value = false
+  } else {
+    storeInfo.value = result.data.storefront
+    storefrontProducts.value = result.data.products
+    categories.value = result.data.categories
   }
+  loading.value = false
 }
 
 // Filtering storefront products
@@ -108,7 +122,7 @@ async function handleCheckout() {
 
   checkingOut.value = true
   try {
-    const order = await createOnlineOrder({
+    const result = await createOnlineOrder({
       storefront_id: storeInfo.value!.id,
       customer_name: customerName.value,
       customer_phone: customerPhone.value,
@@ -116,8 +130,8 @@ async function handleCheckout() {
       notes: customerNotes.value
     })
 
-    if (order) {
-      lastCreatedOrder.value = order
+    if (result.success && result.data) {
+      lastCreatedOrder.value = result.data
       orderSuccess.value = true
 
       toast.add({
@@ -128,6 +142,12 @@ async function handleCheckout() {
 
       await trackStorefrontEvent(slug.value, 'whatsapp_click')
       window.open(generatedWhatsAppLink.value, '_blank')
+    } else {
+      toast.add({
+        title: 'Checkout gagal',
+        description: result.error || 'Terjadi kesalahan.',
+        color: 'error'
+      })
     }
   } finally {
     checkingOut.value = false
@@ -291,7 +311,7 @@ onMounted(async () => {
         :filtered-catalog="filteredCatalog"
         :active-theme-classes="activeThemeClasses"
         :cart="cart"
-        @add-to-cart="addToCart"
+        @add-to-cart="handleAddToCart"
       />
 
       <!-- 4. BOTTOM FOOTER -->
@@ -317,7 +337,7 @@ onMounted(async () => {
       :cart-subtotal="cartSubtotal"
       :active-theme-classes="activeThemeClasses"
       :checking-out="checkingOut"
-      @add-to-cart="addToCart"
+      @add-to-cart="handleAddToCart"
       @remove-from-cart="removeFromCart"
       @checkout="handleCheckout"
     />

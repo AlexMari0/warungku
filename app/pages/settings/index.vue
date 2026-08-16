@@ -103,9 +103,18 @@ onUnmounted(() => {
 
 // Fetch all settings & storefront catalog configurations
 async function fetchData() {
-  await fetchCategories()
-  await fetchProducts({ orderBy: 'name', orderAscending: true })
-  await fetchStorefrontSettings(products.value)
+  const catResult = await fetchCategories()
+  if (!catResult.success) {
+    toast.add({ title: 'Gagal memuat kategori', description: catResult.error, color: 'error' })
+  }
+  const result = await fetchProducts({ orderBy: 'name', orderAscending: true })
+  if (!result.success) {
+    toast.add({ title: 'Gagal memuat produk', description: result.error || 'Terjadi kesalahan.', color: 'error' })
+  }
+  const storeResult = await fetchStorefrontSettings(products.value)
+  if (!storeResult.success) {
+    toast.add({ title: 'Gagal memuat pengaturan toko', description: storeResult.error, color: 'error' })
+  }
 }
 
 function onSlugInput(event: Event) {
@@ -121,9 +130,20 @@ function updateCustomDescription(pId: string, value: string) {
 }
 
 async function handleSaveSettings() {
-  const success = await saveSettings()
-  if (success) {
+  const result = await saveSettings()
+  if (result.success) {
+    toast.add({
+      title: 'Pengaturan Etalase Tersimpan',
+      description: 'Perubahan pada toko online Anda berhasil diperbarui.',
+      color: 'success'
+    })
     await fetchData()
+  } else {
+    toast.add({
+      title: 'Gagal menyimpan pengaturan toko',
+      description: result.error || 'Terjadi kesalahan.',
+      color: 'error'
+    })
   }
 }
 

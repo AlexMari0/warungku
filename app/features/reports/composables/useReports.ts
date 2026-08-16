@@ -3,7 +3,6 @@ import type { DailySummary, HourlyTraffic, ProductSalesSummary, PaymentMethodSum
 export function useReports() {
   const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
-  const toast = useToast()
 
   const summary = ref<Partial<DailySummary> & { avg_transaction?: number } | null>(null)
   const summaryComparison = ref<SummaryComparison>({
@@ -70,8 +69,8 @@ export function useReports() {
     period: 'today' | 'week' | 'month' | 'custom',
     customStart?: string,
     customEnd?: string
-  ) {
-    if (!user.value) return
+  ): Promise<{ success: boolean, error?: string }> {
+    if (!user.value) return { success: false, error: 'User not authenticated' }
 
     loading.value = true
     try {
@@ -104,12 +103,9 @@ export function useReports() {
         productSales.value = data.product_sales || []
         paymentSummaries.value = data.payment_summaries || []
       }
+      return { success: true }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal memuat laporan',
-        description: (err as Error).message,
-        color: 'error'
-      })
+      return { success: false, error: (err as Error).message }
     } finally {
       loading.value = false
     }
@@ -118,8 +114,8 @@ export function useReports() {
   /**
    * Fetch product sales breakdown
    */
-  async function fetchProductSales(periodStr: string): Promise<ProductSalesSummary[]> {
-    if (!user.value) return []
+  async function fetchProductSales(periodStr: string): Promise<{ success: boolean, data?: ProductSalesSummary[], error?: string }> {
+    if (!user.value) return { success: false, error: 'User not authenticated' }
     loading.value = true
 
     try {
@@ -129,15 +125,10 @@ export function useReports() {
         query: { period: periodStr }
       })
       productSales.value = data?.product_sales || []
-      return productSales.value
+      return { success: true, data: productSales.value }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal memuat data penjualan produk',
-        description: (err as Error).message,
-        color: 'error'
-      })
       productSales.value = []
-      return []
+      return { success: false, error: (err as Error).message }
     } finally {
       loading.value = false
     }
@@ -146,8 +137,8 @@ export function useReports() {
   /**
    * Fetch payment method summaries
    */
-  async function fetchPaymentSummaries(periodStr: string): Promise<PaymentMethodSummary[]> {
-    if (!user.value) return []
+  async function fetchPaymentSummaries(periodStr: string): Promise<{ success: boolean, data?: PaymentMethodSummary[], error?: string }> {
+    if (!user.value) return { success: false, error: 'User not authenticated' }
     loading.value = true
 
     try {
@@ -157,15 +148,10 @@ export function useReports() {
         query: { period: periodStr }
       })
       paymentSummaries.value = data?.payment_summaries || []
-      return paymentSummaries.value
+      return { success: true, data: paymentSummaries.value }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal memuat data pembayaran',
-        description: (err as Error).message,
-        color: 'error'
-      })
       paymentSummaries.value = []
-      return []
+      return { success: false, error: (err as Error).message }
     } finally {
       loading.value = false
     }
@@ -174,8 +160,8 @@ export function useReports() {
   /**
    * Trigger offline/manual analytics aggregation RPC for a date
    */
-  async function refreshAnalytics(dateStr?: string): Promise<boolean> {
-    if (!user.value) return false
+  async function refreshAnalytics(dateStr?: string): Promise<{ success: boolean, error?: string }> {
+    if (!user.value) return { success: false, error: 'User not authenticated' }
     const targetDate = dateStr || new Date().toISOString().split('T')[0]
 
     try {
@@ -184,27 +170,17 @@ export function useReports() {
         body: { date: targetDate }
       })
 
-      toast.add({
-        title: 'Laporan Diperbarui',
-        description: 'Data analitik berhasil disinkronkan.',
-        color: 'success'
-      })
-      return true
+      return { success: true }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal menyegarkan laporan',
-        description: (err as Error).message,
-        color: 'error'
-      })
-      return false
+      return { success: false, error: (err as Error).message }
     }
   }
 
   /**
    * Fetch and aggregate top products for a date range
    */
-  async function fetchTopProducts(startDate: string, endDate: string): Promise<TopProductItem[]> {
-    if (!user.value) return []
+  async function fetchTopProducts(startDate: string, endDate: string): Promise<{ success: boolean, data?: TopProductItem[], error?: string }> {
+    if (!user.value) return { success: false, error: 'User not authenticated' }
 
     try {
       const data = await apiFetch<{
@@ -234,11 +210,13 @@ export function useReports() {
         prodMap[pid].profit += (Number(row.gross_profit) || 0)
       }
 
-      return Object.values(prodMap)
+      const topProducts = Object.values(prodMap)
         .sort((a, b) => b.qty - a.qty)
         .slice(0, 5)
-    } catch (_err: unknown) {
-      return []
+
+      return { success: true, data: topProducts }
+    } catch (err: unknown) {
+      return { success: false, error: (err as Error).message }
     }
   }
 

@@ -3,7 +3,6 @@ import type { AISession, AIMessageUI, AIQueryType } from '~/core/types'
 export function useAICoach() {
   const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
-  const toast = useToast()
 
   const sessions = ref<AISession[]>([])
   const activeSessionId = ref<string | null>(null)
@@ -19,10 +18,10 @@ export function useAICoach() {
   /**
    * Fetch all AI conversation sessions for the active merchant
    */
-  async function fetchSessions(): Promise<AISession[]> {
+  async function fetchSessions(): Promise<{ success: boolean, data?: AISession[], error?: string }> {
     if (!user.value) {
       sessions.value = []
-      return []
+      return { success: false, error: 'User not authenticated' }
     }
 
     loadingSessions.value = true
@@ -33,14 +32,10 @@ export function useAICoach() {
       if (sessions.value.length > 0 && !activeSessionId.value) {
         activeSessionId.value = sessions.value[0]?.id || null
       }
-      return sessions.value
+      return { success: true, data: sessions.value }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal memuat sesi',
-        description: (err as Error).message,
-        color: 'error'
-      })
-      return []
+      sessions.value = []
+      return { success: false, error: (err as Error).message }
     } finally {
       loadingSessions.value = false
     }
@@ -49,8 +44,8 @@ export function useAICoach() {
   /**
    * Create a new conversation session
    */
-  async function createSession(customTitle?: string): Promise<AISession | null> {
-    if (!user.value) return null
+  async function createSession(customTitle?: string): Promise<{ success: boolean, data?: AISession, error?: string }> {
+    if (!user.value) return { success: false, error: 'User not authenticated' }
     const newTitle = customTitle || `Analisis Baru #${sessions.value.length + 1}`
 
     try {
@@ -63,30 +58,19 @@ export function useAICoach() {
         sessions.value = [data, ...sessions.value]
         activeSessionId.value = data.id
         messages.value = []
-
-        toast.add({
-          title: 'Sesi baru dibuat',
-          description: `Memulai percakapan "${newTitle}"`,
-          color: 'success'
-        })
-        return data
+        return { success: true, data }
       }
-      return null
+      return { success: false, error: 'Gagal membuat sesi' }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal membuat sesi baru',
-        description: (err as Error).message,
-        color: 'error'
-      })
-      return null
+      return { success: false, error: (err as Error).message }
     }
   }
 
   /**
    * Rename an existing session
    */
-  async function renameSession(id: string, newTitle: string): Promise<boolean> {
-    if (!newTitle.trim()) return false
+  async function renameSession(id: string, newTitle: string): Promise<{ success: boolean, error?: string }> {
+    if (!newTitle.trim()) return { success: false, error: 'Nama sesi tidak boleh kosong' }
 
     try {
       const idx = sessions.value.findIndex(s => s.id === id)
@@ -94,25 +78,16 @@ export function useAICoach() {
         sessions.value[idx]!.title = newTitle.trim()
       }
 
-      toast.add({
-        title: 'Sesi berhasil diubah nama',
-        color: 'success'
-      })
-      return true
+      return { success: true }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal mengubah nama sesi',
-        description: (err as Error).message,
-        color: 'error'
-      })
-      return false
+      return { success: false, error: (err as Error).message }
     }
   }
 
   /**
    * Delete a session and its associated logs
    */
-  async function deleteSession(id: string): Promise<boolean> {
+  async function deleteSession(id: string): Promise<{ success: boolean, error?: string }> {
     try {
       await apiFetch(`/api/ai/sessions/${id}`, {
         method: 'DELETE'
@@ -123,25 +98,16 @@ export function useAICoach() {
         activeSessionId.value = sessions.value.length > 0 ? (sessions.value[0]?.id || null) : null
       }
 
-      toast.add({
-        title: 'Sesi dihapus',
-        color: 'success'
-      })
-      return true
+      return { success: true }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal menghapus sesi',
-        description: (err as Error).message,
-        color: 'error'
-      })
-      return false
+      return { success: false, error: (err as Error).message }
     }
   }
 
   /**
    * Fetch chat history and feedback ratings for a specific session
    */
-  async function fetchMessages(sessId: string): Promise<AIMessageUI[]> {
+  async function fetchMessages(sessId: string): Promise<{ success: boolean, data?: AIMessageUI[], error?: string }> {
     loadingMessages.value = true
 
     try {
@@ -165,15 +131,10 @@ export function useAICoach() {
       }))
 
       messages.value = formatted
-      return formatted
+      return { success: true, data: formatted }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal memuat pesan',
-        description: (err as Error).message,
-        color: 'error'
-      })
       messages.value = []
-      return []
+      return { success: false, error: (err as Error).message }
     } finally {
       loadingMessages.value = false
     }
@@ -186,16 +147,19 @@ export function useAICoach() {
     prompt: string,
     queryType: AIQueryType = 'analysis',
     onSuccess?: () => void
-  ): Promise<AIMessageUI | null> {
+  ): Promise<{ success: boolean, data?: AIMessageUI, error?: string }> {
     const finalPrompt = prompt.trim()
-    if (!finalPrompt) return null
+    if (!finalPrompt) return { success: false, error: 'Pesan kosong' }
 
     if (!activeSessionId.value) {
-      await createSession(finalPrompt.length > 20 ? finalPrompt.substring(0, 20) + '...' : finalPrompt)
+      const createRes = await createSession(finalPrompt.length > 20 ? finalPrompt.substring(0, 20) + '...' : finalPrompt)
+      if (!createRes.success) {
+        return { success: false, error: createRes.error }
+      }
     }
 
     const currentSessId = activeSessionId.value
-    if (!currentSessId || !user.value) return null
+    if (!currentSessId || !user.value) return { success: false, error: 'User tidak terautentikasi atau sesi tidak aktif' }
 
     sendingMessage.value = true
 
@@ -243,22 +207,16 @@ export function useAICoach() {
         if (tempIdx !== -1) {
           messages.value[tempIdx] = finalMsg
         }
-        return finalMsg
+        return { success: true, data: finalMsg }
       }
-      return null
+      return { success: false, error: 'Gagal mendapatkan balasan dari AI' }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal mengirim pesan',
-        description: (err as Error).message,
-        color: 'error'
-      })
-
       const tempIdx = messages.value.findIndex(m => m.id === userMsgId)
       if (tempIdx !== -1 && messages.value[tempIdx]) {
         messages.value[tempIdx]!.failed = true
         messages.value[tempIdx]!.error_text = (err as Error).message || 'Koneksi terputus. Silakan coba lagi.'
       }
-      return null
+      return { success: false, error: (err as Error).message }
     } finally {
       sendingMessage.value = false
       onSuccess?.()
@@ -268,15 +226,15 @@ export function useAICoach() {
   /**
    * Retry sending a failed message
    */
-  async function retryMessage(failedMsg: AIMessageUI, onSuccess?: () => void): Promise<void> {
+  async function retryMessage(failedMsg: AIMessageUI, onSuccess?: () => void): Promise<{ success: boolean, data?: AIMessageUI, error?: string }> {
     messages.value = messages.value.filter(m => m.id !== failedMsg.id)
-    await sendMessage(failedMsg.query_text, failedMsg.query_type, onSuccess)
+    return await sendMessage(failedMsg.query_text, failedMsg.query_type, onSuccess)
   }
 
   /**
    * Submit helpful/not_helpful rating feedback for an AI response
    */
-  async function rateResponse(message: AIMessageUI, rating: 'helpful' | 'not_helpful'): Promise<boolean> {
+  async function rateResponse(message: AIMessageUI, rating: 'helpful' | 'not_helpful'): Promise<{ success: boolean, error?: string }> {
     try {
       await apiFetch('/api/ai/feedback', {
         method: 'POST',
@@ -288,19 +246,9 @@ export function useAICoach() {
       })
 
       message.rating = rating
-      toast.add({
-        title: 'Tanggapan berhasil disimpan',
-        description: 'Umpan balik membantu kami meningkatkan kualitas analisis.',
-        color: 'success'
-      })
-      return true
+      return { success: true }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal memberikan tanggapan',
-        description: (err as Error).message,
-        color: 'error'
-      })
-      return false
+      return { success: false, error: (err as Error).message }
     }
   }
 

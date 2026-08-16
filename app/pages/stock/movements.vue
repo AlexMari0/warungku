@@ -27,8 +27,24 @@ const {
   clearDates
 } = useStockMovements()
 
+const toast = useToast()
+
+async function initMovements() {
+  const result = await fetchMovements()
+  if (!result.success && result.error) {
+    toast.add({ title: 'Gagal memuat mutasi', description: result.error, color: 'error' })
+  }
+}
+
+async function handleLoadMore() {
+  const result = await loadMore()
+  if (!result.success && result.error) {
+    toast.add({ title: 'Gagal memuat mutasi tambahan', description: result.error, color: 'error' })
+  }
+}
+
 onMounted(() => {
-  fetchMovements()
+  initMovements()
 })
 </script>
 
@@ -73,7 +89,7 @@ onMounted(() => {
       :total-live-count="totalLiveCount"
       :has-more="hasMore"
       :server-loading="serverLoading"
-      @load-more="loadMore"
+      @load-more="handleLoadMore"
     />
   </div>
 </template>

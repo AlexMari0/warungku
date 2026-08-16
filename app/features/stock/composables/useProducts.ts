@@ -9,7 +9,6 @@ export interface FetchProductsOptions {
 export function useProducts() {
   const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
-  const toast = useToast()
 
   const products = ref<Product[]>([])
   const loading = ref(false)
@@ -17,10 +16,10 @@ export function useProducts() {
   /**
    * Fetch all merchant products with category metadata
    */
-  async function fetchProducts(options?: FetchProductsOptions): Promise<Product[]> {
+  async function fetchProducts(options?: FetchProductsOptions): Promise<{ success: boolean, data?: Product[], error?: string }> {
     if (!user.value) {
       products.value = []
-      return []
+      return { success: true, data: [] }
     }
 
     loading.value = true
@@ -34,15 +33,10 @@ export function useProducts() {
       })
 
       products.value = data || []
-      return products.value
+      return { success: true, data: products.value }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal mengambil data produk',
-        description: (err as Error).message || 'Terjadi kesalahan pada server database.',
-        color: 'error'
-      })
       products.value = []
-      return []
+      return { success: false, error: (err as Error).message || 'Terjadi kesalahan pada server database.' }
     } finally {
       loading.value = false
     }
@@ -51,8 +45,8 @@ export function useProducts() {
   /**
    * Create a new product record
    */
-  async function createProduct(payload: Partial<Product>): Promise<Product | null> {
-    if (!user.value) return null
+  async function createProduct(payload: Partial<Product>): Promise<{ success: boolean, data?: Product, error?: string }> {
+    if (!user.value) return { success: false, error: 'User not authenticated' }
 
     try {
       const data = await apiFetch<Product>('/api/products', {
@@ -60,79 +54,48 @@ export function useProducts() {
         body: payload
       })
 
-      toast.add({
-        title: 'Produk berhasil ditambahkan',
-        description: `Produk "${payload.name}" siap dijual.`,
-        color: 'success'
-      })
-
-      return data
+      return { success: true, data }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal menambah produk',
-        description: (err as Error).message || 'Periksa data input Anda.',
-        color: 'error'
-      })
-      return null
+      return { success: false, error: (err as Error).message || 'Periksa data input Anda.' }
     }
   }
 
   /**
    * Update an existing product
    */
-  async function updateProduct(id: string, payload: Partial<Product>): Promise<boolean> {
+  async function updateProduct(id: string, payload: Partial<Product>): Promise<{ success: boolean, error?: string }> {
     try {
       await apiFetch<Product>(`/api/products/${id}`, {
         method: 'PATCH',
         body: payload
       })
 
-      toast.add({
-        title: 'Produk berhasil diperbarui',
-        color: 'success'
-      })
-
-      return true
+      return { success: true }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal memperbarui produk',
-        description: (err as Error).message,
-        color: 'error'
-      })
-      return false
+      return { success: false, error: (err as Error).message }
     }
   }
 
   /**
    * Soft delete or hard delete product
    */
-  async function deleteProduct(id: string): Promise<boolean> {
+  async function deleteProduct(id: string): Promise<{ success: boolean, error?: string }> {
     try {
       await apiFetch(`/api/products/${id}`, {
         method: 'DELETE'
       })
 
       products.value = products.value.filter(p => p.id !== id)
-      toast.add({
-        title: 'Produk berhasil dihapus',
-        color: 'success'
-      })
-
-      return true
+      return { success: true }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal menghapus produk',
-        description: (err as Error).message,
-        color: 'error'
-      })
-      return false
+      return { success: false, error: (err as Error).message }
     }
   }
 
   /**
    * Toggle product active status
    */
-  async function toggleProductActive(id: string, status: boolean): Promise<boolean> {
+  async function toggleProductActive(id: string, status: boolean): Promise<{ success: boolean, error?: string }> {
     try {
       await apiFetch(`/api/products/${id}/toggle`, {
         method: 'PATCH',
@@ -144,14 +107,9 @@ export function useProducts() {
         found.is_active = status
       }
 
-      return true
+      return { success: true }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal mengubah status',
-        description: (err as Error).message,
-        color: 'error'
-      })
-      return false
+      return { success: false, error: (err as Error).message }
     }
   }
 

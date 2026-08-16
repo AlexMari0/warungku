@@ -23,15 +23,74 @@ const {
   rateResponse
 } = useAICoach()
 
+const toast = useToast()
 const streamingText = ref('')
 const typingIndex = ref(-1)
 const messageInput = ref('')
 const isHistoryModalOpen = ref(false)
 
+async function handleFetchSessions() {
+  const result = await fetchSessions()
+  if (!result.success) {
+    toast.add({ title: 'Gagal memuat sesi', description: result.error || 'Terjadi kesalahan.', color: 'error' })
+  }
+}
+
+async function handleCreateSession(customTitle?: string) {
+  const result = await createNewSession(customTitle)
+  if (result.success && result.data) {
+    toast.add({
+      title: 'Sesi baru dibuat',
+      description: `Memulai percakapan "${result.data.title}"`,
+      color: 'success'
+    })
+  } else {
+    toast.add({
+      title: 'Gagal membuat sesi baru',
+      description: result.error || 'Terjadi kesalahan.',
+      color: 'error'
+    })
+  }
+}
+
+async function handleRenameSession(id: string, newTitle: string) {
+  const result = await performRenameSession(id, newTitle)
+  if (result.success) {
+    toast.add({ title: 'Sesi berhasil diubah nama', color: 'success' })
+  } else {
+    toast.add({ title: 'Gagal mengubah nama sesi', description: result.error, color: 'error' })
+  }
+}
+
+async function handleDeleteSession(id: string) {
+  const result = await deleteSession(id)
+  if (result.success) {
+    toast.add({ title: 'Sesi dihapus', color: 'success' })
+  } else {
+    toast.add({ title: 'Gagal menghapus sesi', description: result.error, color: 'error' })
+  }
+}
+
+async function handleRateResponse(message: AIMessageUI, rating: 'helpful' | 'not_helpful') {
+  const result = await rateResponse(message, rating)
+  if (result.success) {
+    toast.add({
+      title: 'Tanggapan berhasil disimpan',
+      description: 'Umpan balik membantu kami meningkatkan kualitas analisis.',
+      color: 'success'
+    })
+  } else {
+    toast.add({ title: 'Gagal memberikan tanggapan', description: result.error, color: 'error' })
+  }
+}
+
 // Watch session select
-watch(activeSessionId, (newVal) => {
+watch(activeSessionId, async (newVal) => {
   if (newVal) {
-    fetchMessages(newVal)
+    const result = await fetchMessages(newVal)
+    if (!result.success) {
+      toast.add({ title: 'Gagal memuat pesan', description: result.error, color: 'error' })
+    }
   } else {
     messages.value = []
   }
@@ -54,15 +113,21 @@ async function sendMessage(customPrompt?: string, customType?: 'analysis' | 'rec
 
   if (!finalPrompt) return
   messageInput.value = ''
-  await sendCoachMessage(finalPrompt, finalType, scrollToBottom)
+  const result = await sendCoachMessage(finalPrompt, finalType, scrollToBottom)
+  if (!result?.success) {
+    toast.add({ title: 'Gagal mengirim pesan', description: result?.error || 'Terjadi kesalahan.', color: 'error' })
+  }
 }
 
 async function retryMessage(failedMsg: AIMessageUI) {
-  await retryCoachMessage(failedMsg, scrollToBottom)
+  const result = await retryCoachMessage(failedMsg, scrollToBottom)
+  if (!result?.success) {
+    toast.add({ title: 'Gagal mengirim pesan', description: result?.error || 'Terjadi kesalahan.', color: 'error' })
+  }
 }
 
 onMounted(() => {
-  fetchSessions()
+  handleFetchSessions()
 })
 </script>
 
@@ -130,7 +195,7 @@ onMounted(() => {
               :streaming-text="streamingText"
               :sending-message="sendingMessage"
               @retry="retryMessage"
-              @rate="rateResponse"
+              @rate="handleRateResponse"
             />
           </div>
         </div>
@@ -170,9 +235,9 @@ onMounted(() => {
       :active-session-id="activeSessionId"
       :loading-sessions="loadingSessions"
       @select-session="activeSessionId = $event"
-      @create-session="createNewSession"
-      @rename-session="performRenameSession"
-      @delete-session="deleteSession"
+      @create-session="handleCreateSession"
+      @rename-session="handleRenameSession"
+      @delete-session="handleDeleteSession"
     />
   </div>
 </template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Customer, PaymentMethod } from '~/core/types'
+import type { Customer, PaymentMethod, Order, Product, CartItem } from '~/core/types'
 
 definePageMeta({
   layout: 'default'
@@ -11,9 +11,12 @@ const toast = useToast()
 const { products, fetchProducts, fetchSalesFrequency } = useProducts()
 const { categories, fetchCategories } = useCategories()
 const { cart, addToCart, increaseQty, decreaseQty, removeFromCart, clearCart, cartSubtotal, totalCartItemsCount } = useCart()
-const { processingCheckout, isReceiptOpen, completedOrder, processCheckout, resetCheckoutState } = useCheckout()
+const { processingCheckout, processCheckout } = useCheckout()
 const { customers, fetchCustomers } = useCustomers()
 
+// POS UI State
+const isReceiptOpen = ref(false)
+const completedOrder = ref<Order | null>(null)
 // POS State
 const loading = ref(true)
 const salesFrequency = ref<Record<string, number>>({})
@@ -80,9 +83,12 @@ async function fetchPOSContext() {
   }
   loading.value = true
   try {
-    await fetchCategories()
-    await fetchCustomers()
-    await fetchProducts({ activeOnly: true, orderBy: 'created_at', orderAscending: false })
+    const catResult = await fetchCategories()
+    if (!catResult.success) throw new Error(catResult.error || 'Gagal mengambil kategori')
+    const custResult = await fetchCustomers()
+    if (!custResult.success) throw new Error(custResult.error || 'Gagal mengambil pelanggan')
+    const productResult = await fetchProducts({ activeOnly: true, orderBy: 'created_at', orderAscending: false })
+    if (!productResult.success) throw new Error(productResult.error || 'Gagal mengambil data produk')
     salesFrequency.value = await fetchSalesFrequency()
   } catch (err: unknown) {
     toast.add({
@@ -100,6 +106,22 @@ function onCustomerAdded(newCust: Customer) {
   selectedCustomerId.value = newCust.id
 }
 
+function handleAddToCart(product: Product) {
+  const result = addToCart(product)
+  if (!result.success) {
+    toast.add({ title: 'Perhatian', description: result.error, color: 'warning' })
+  } else {
+    toast.add({ title: 'Ditambahkan ke keranjang', description: `"${product.name}" berhasil dimasukkan.`, color: 'success', duration: 1000 })
+  }
+}
+
+function handleIncreaseQty(item: CartItem) {
+  const result = increaseQty(item)
+  if (!result.success) {
+    toast.add({ title: 'Perhatian', description: result.error, color: 'warning' })
+  }
+}
+
 async function handleCheckout() {
   const result = await processCheckout({
     cart: cart.value,
@@ -111,8 +133,13 @@ async function handleCheckout() {
     orderNotes: orderNotes.value
   })
 
-  if (result) {
+  if (result.success && result.data) {
+    completedOrder.value = result.data
+    isReceiptOpen.value = true
+    toast.add({ title: 'Checkout Berhasil', description: `Transaksi #${result.data.order_number} berhasil dicatat.`, color: 'success' })
     await fetchPOSContext()
+  } else {
+    toast.add({ title: 'Checkout Gagal', description: result.error || 'Terjadi kesalahan.', color: 'error' })
   }
 }
 
@@ -124,7 +151,8 @@ function resetPOSRegister() {
   discountType.value = 'rp'
   amountPaid.value = null
   paymentMethod.value = 'cash'
-  resetCheckoutState()
+  completedOrder.value = null
+  isReceiptOpen.value = false
 }
 
 onMounted(() => {
@@ -139,7 +167,7 @@ onMounted(() => {
       :products="products"
       :categories="categories"
       :loading="loading"
-      @add-to-cart="addToCart"
+      @add-to-cart="handleAddToCart"
     />
 
     <!-- RIGHT PANEL: Shopping Cart Register & Checkout -->
@@ -148,11 +176,11 @@ onMounted(() => {
         :cart="cart"
         :total-count="totalCartItemsCount"
         :best-sellers="bestSellers"
-        @increase-qty="increaseQty"
+        @increase-qty="handleIncreaseQty"
         @decrease-qty="decreaseQty"
         @remove-from-cart="removeFromCart"
         @reset-cart="resetPOSRegister"
-        @add-to-cart="addToCart"
+        @add-to-cart="handleAddToCart"
       />
 
       <CheckoutSummary

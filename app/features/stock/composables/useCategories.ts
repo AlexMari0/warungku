@@ -3,7 +3,6 @@ import type { Category } from '~/core/types'
 export function useCategories() {
   const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
-  const toast = useToast()
 
   const categories = ref<Category[]>([])
   const loading = ref(false)
@@ -11,25 +10,20 @@ export function useCategories() {
   /**
    * Fetch categories ordered by sort_order
    */
-  async function fetchCategories(): Promise<Category[]> {
+  async function fetchCategories(): Promise<{ success: boolean, data?: Category[], error?: string }> {
     if (!user.value) {
       categories.value = []
-      return []
+      return { success: true, data: [] }
     }
 
     loading.value = true
     try {
       const data = await apiFetch<Category[]>('/api/categories')
       categories.value = data || []
-      return categories.value
+      return { success: true, data: categories.value }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal memuat kategori',
-        description: (err as Error).message,
-        color: 'error'
-      })
       categories.value = []
-      return []
+      return { success: false, error: (err as Error).message }
     } finally {
       loading.value = false
     }
@@ -38,8 +32,8 @@ export function useCategories() {
   /**
    * Create a new category
    */
-  async function createCategory(payload: Pick<Category, 'name' | 'color'>): Promise<Category | null> {
-    if (!user.value) return null
+  async function createCategory(payload: Pick<Category, 'name' | 'color'>): Promise<{ success: boolean, data?: Category, error?: string }> {
+    if (!user.value) return { success: false, error: 'User not authenticated' }
 
     try {
       const nextSortOrder = categories.value.length + 1
@@ -51,79 +45,48 @@ export function useCategories() {
         }
       })
 
-      toast.add({
-        title: 'Kategori berhasil ditambahkan',
-        description: `Kategori "${payload.name}" siap digunakan.`,
-        color: 'success'
-      })
-
-      return data
+      return { success: true, data }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal membuat kategori',
-        description: (err as Error).message,
-        color: 'error'
-      })
-      return null
+      return { success: false, error: (err as Error).message }
     }
   }
 
   /**
    * Update an existing category
    */
-  async function updateCategory(id: string, payload: Partial<Category>): Promise<boolean> {
+  async function updateCategory(id: string, payload: Partial<Category>): Promise<{ success: boolean, error?: string }> {
     try {
       await apiFetch<Category>(`/api/categories/${id}`, {
         method: 'PATCH',
         body: payload
       })
 
-      toast.add({
-        title: 'Kategori berhasil diperbarui',
-        color: 'success'
-      })
-
-      return true
+      return { success: true }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal memperbarui kategori',
-        description: (err as Error).message,
-        color: 'error'
-      })
-      return false
+      return { success: false, error: (err as Error).message }
     }
   }
 
   /**
    * Delete a category
    */
-  async function deleteCategory(id: string): Promise<boolean> {
+  async function deleteCategory(id: string): Promise<{ success: boolean, error?: string }> {
     try {
       await apiFetch(`/api/categories/${id}`, {
         method: 'DELETE'
       })
 
       categories.value = categories.value.filter(c => c.id !== id)
-      toast.add({
-        title: 'Kategori dihapus',
-        color: 'success'
-      })
-
-      return true
+      return { success: true }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal menghapus kategori',
-        description: (err as Error).message || 'Kategori ini mungkin sedang digunakan oleh produk.',
-        color: 'error'
-      })
-      return false
+      return { success: false, error: (err as Error).message || 'Kategori ini mungkin sedang digunakan oleh produk.' }
     }
   }
 
   /**
    * Reorder category sort orders
    */
-  async function reorderCategories(orderedIds: string[]): Promise<boolean> {
+  async function reorderCategories(orderedIds: string[]): Promise<{ success: boolean, error?: string }> {
     try {
       const updates = orderedIds.map((id, index) =>
         apiFetch(`/api/categories/${id}`, {
@@ -134,14 +97,9 @@ export function useCategories() {
 
       await Promise.all(updates)
       await fetchCategories()
-      return true
+      return { success: true }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal mengurutkan kategori',
-        description: (err as Error).message,
-        color: 'error'
-      })
-      return false
+      return { success: false, error: (err as Error).message }
     }
   }
 

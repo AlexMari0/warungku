@@ -7,7 +7,6 @@ export interface PublicCartItem {
 }
 
 export function usePublicCart() {
-  const toast = useToast()
   const cart = ref<PublicCartItem[]>([])
 
   const cartTotalCount = computed(() =>
@@ -18,20 +17,15 @@ export function usePublicCart() {
     cart.value.reduce((acc, item) => acc + (item.quantity * item.product.sell_price), 0)
   )
 
-  function addToCart(sfp: { products?: Product; custom_description?: string | null } & Partial<StorefrontProduct>) {
+  function addToCart(sfp: { products?: Product; custom_description?: string | null } & Partial<StorefrontProduct>): { success: boolean, data?: { product: Product }, error?: string } {
     const product = sfp.products
-    if (!product) return
+    if (!product) return { success: false, error: 'Produk tidak ditemukan' }
 
     const currentInCart = cart.value.find(item => item.product.id === product.id)
     const qtyInCart = currentInCart ? currentInCart.quantity : 0
 
     if (qtyInCart >= product.stock_qty) {
-      toast.add({
-        title: 'Stok tidak mencukupi',
-        description: `Batas maksimum stok yang tersedia adalah ${product.stock_qty} ${product.unit}.`,
-        color: 'warning'
-      })
-      return
+      return { success: false, error: `Batas maksimum stok yang tersedia adalah ${product.stock_qty} ${product.unit}.` }
     }
 
     if (currentInCart) {
@@ -44,11 +38,7 @@ export function usePublicCart() {
       })
     }
 
-    toast.add({
-      title: 'Ditambahkan ke keranjang',
-      description: `${product.name} telah masuk ke dalam keranjang belanja.`,
-      color: 'success'
-    })
+    return { success: true, data: { product } }
   }
 
   function removeFromCart(productId: string) {

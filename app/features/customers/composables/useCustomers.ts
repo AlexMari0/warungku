@@ -3,7 +3,6 @@ import type { Customer } from '~/core/types'
 export function useCustomers() {
   const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
-  const toast = useToast()
 
   const customers = ref<Customer[]>([])
   const loading = ref(false)
@@ -11,25 +10,20 @@ export function useCustomers() {
   /**
    * Fetch all customers for the authenticated merchant
    */
-  async function fetchCustomers(): Promise<Customer[]> {
+  async function fetchCustomers(): Promise<{ success: boolean, data?: Customer[], error?: string }> {
     if (!user.value) {
       customers.value = []
-      return []
+      return { success: true, data: [] }
     }
 
     loading.value = true
     try {
       const data = await apiFetch<Customer[]>('/api/customers')
       customers.value = data || []
-      return customers.value
+      return { success: true, data: customers.value }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal memuat daftar pelanggan',
-        description: (err as Error).message,
-        color: 'error'
-      })
       customers.value = []
-      return []
+      return { success: false, error: (err as Error).message }
     } finally {
       loading.value = false
     }
@@ -38,8 +32,8 @@ export function useCustomers() {
   /**
    * Create a new customer record
    */
-  async function createCustomer(payload: { name: string; phone?: string; email?: string }): Promise<Customer | null> {
-    if (!user.value) return null
+  async function createCustomer(payload: { name: string; phone?: string; email?: string }): Promise<{ success: boolean, data?: Customer, error?: string }> {
+    if (!user.value) return { success: false, error: 'User not authenticated' }
 
     try {
       const data = await apiFetch<Customer>('/api/customers', {
@@ -47,21 +41,10 @@ export function useCustomers() {
         body: payload
       })
 
-      toast.add({
-        title: 'Pelanggan ditambahkan',
-        description: `Pelanggan "${payload.name}" berhasil terdaftar.`,
-        color: 'success'
-      })
-
       customers.value.unshift(data)
-      return data
+      return { success: true, data }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Gagal menambah pelanggan',
-        description: (err as Error).message,
-        color: 'error'
-      })
-      return null
+      return { success: false, error: (err as Error).message }
     }
   }
 

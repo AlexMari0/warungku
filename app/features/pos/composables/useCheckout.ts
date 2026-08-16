@@ -13,39 +13,26 @@ export interface ProcessCheckoutParams {
 export function useCheckout() {
   const { apiFetch } = useApiClient()
   const user = useSupabaseUser()
-  const toast = useToast()
 
   const processingCheckout = ref(false)
-  const isReceiptOpen = ref(false)
-  const completedOrder = ref<Order | null>(null)
 
   /**
    * Execute atomic transaction checkout via Go backend API
    */
-  async function processCheckout(params: ProcessCheckoutParams): Promise<Order | null> {
+  async function processCheckout(params: ProcessCheckoutParams): Promise<{ success: boolean, data?: Order, error?: string }> {
     const { cart, paymentMethod, amountPaid, cartTotal, selectedCustomerId, discountAmount, orderNotes } = params
 
     if (cart.length === 0) {
-      toast.add({
-        title: 'Keranjang kosong',
-        description: 'Silakan pilih produk terlebih dahulu.',
-        color: 'warning'
-      })
-      return null
+      return { success: false, error: 'Silakan pilih produk terlebih dahulu.' }
     }
 
     const payAmount = amountPaid !== null ? amountPaid : cartTotal
 
     if (paymentMethod === 'cash' && payAmount < cartTotal) {
-      toast.add({
-        title: 'Pembayaran kurang',
-        description: 'Nominal uang tunai dibayarkan harus lebih besar atau sama dengan total belanja.',
-        color: 'error'
-      })
-      return null
+      return { success: false, error: 'Nominal uang tunai dibayarkan harus lebih besar atau sama dengan total belanja.' }
     }
 
-    if (!user.value) return null
+    if (!user.value) return { success: false, error: 'User not authenticated' }
     processingCheckout.value = true
 
     try {
@@ -86,38 +73,16 @@ export function useCheckout() {
         customer: customerFromDb
       }
 
-      completedOrder.value = fullOrder
-
-      toast.add({
-        title: 'Checkout Berhasil',
-        description: `Transaksi #${orderFromDb.order_number} berhasil dicatat.`,
-        color: 'success'
-      })
-
-      isReceiptOpen.value = true
-      return fullOrder
+      return { success: true, data: fullOrder }
     } catch (err: unknown) {
-      toast.add({
-        title: 'Checkout Gagal',
-        description: (err as Error).message,
-        color: 'error'
-      })
-      return null
+      return { success: false, error: (err as Error).message }
     } finally {
       processingCheckout.value = false
     }
   }
 
-  function resetCheckoutState() {
-    completedOrder.value = null
-    isReceiptOpen.value = false
-  }
-
   return {
     processingCheckout,
-    isReceiptOpen,
-    completedOrder,
-    processCheckout,
-    resetCheckoutState
+    processCheckout
   }
 }

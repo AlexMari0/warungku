@@ -7,6 +7,7 @@ definePageMeta({
 
 const { summary, summaryComparison, hourlyTraffic, loading, fetchDashboardReports, fetchTopProducts, calculateDateRange } = useReports()
 const topProducts = ref<TopProductItem[]>([])
+const toast = useToast()
 
 const selectedPeriod = ref<'today' | 'week' | 'month' | 'custom'>('today')
 const customStartDate = ref(new Date().toISOString().split('T')[0] || '')
@@ -14,11 +15,19 @@ const customEndDate = ref(new Date().toISOString().split('T')[0] || '')
 
 // Fetch active reporting data
 async function fetchDashboardData() {
-  await fetchDashboardReports(selectedPeriod.value, customStartDate.value, customEndDate.value)
+  const result = await fetchDashboardReports(selectedPeriod.value, customStartDate.value, customEndDate.value)
+  if (!result.success) {
+    toast.add({ title: 'Gagal memuat laporan', description: result.error || 'Terjadi kesalahan.', color: 'error' })
+  }
 
   // Fetch top products for period
   const { startDate, endDate } = calculateDateRange(selectedPeriod.value, customStartDate.value, customEndDate.value)
-  topProducts.value = await fetchTopProducts(startDate, endDate)
+  const topProdResult = await fetchTopProducts(startDate, endDate)
+  if (topProdResult.success && topProdResult.data) {
+    topProducts.value = topProdResult.data
+  } else if (!topProdResult.success) {
+    toast.add({ title: 'Gagal memuat produk unggulan', description: topProdResult.error, color: 'error' })
+  }
 }
 
 function setPeriod(p: 'today' | 'week' | 'month' | 'custom') {

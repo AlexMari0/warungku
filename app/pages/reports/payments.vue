@@ -6,6 +6,7 @@ definePageMeta({
 const { paymentSummaries: paymentsData, loading, fetchPaymentSummaries } = useReports()
 const period = ref<'daily' | 'weekly' | 'monthly'>('monthly')
 const hoveredMethod = ref<string | null>(null)
+const toast = useToast()
 
 // Map methods to beautiful desaturated brand colors and display names
 const methodDisplay = {
@@ -27,8 +28,11 @@ const paymentTrends: Record<string, number> = {
   cash: -1.2
 }
 
-function loadData() {
-  fetchPaymentSummaries(period.value)
+async function loadData() {
+  const result = await fetchPaymentSummaries(period.value)
+  if (!result.success) {
+    toast.add({ title: 'Gagal memuat data pembayaran', description: result.error || 'Terjadi kesalahan.', color: 'error' })
+  }
 }
 
 watch(period, () => {

@@ -22,8 +22,18 @@ const productToDelete = ref<Product | null>(null)
 async function fetchData() {
   if (!user.value) return
   try {
-    await fetchCategories()
-    await fetchProducts()
+    const catResult = await fetchCategories()
+    if (!catResult.success) {
+      toast.add({ title: 'Gagal memuat kategori', description: catResult.error, color: 'error' })
+    }
+    const result = await fetchProducts()
+    if (!result.success) {
+      toast.add({
+        title: 'Gagal memuat data produk',
+        description: result.error || 'Terjadi kesalahan.',
+        color: 'error'
+      })
+    }
   } catch (err: unknown) {
     toast.add({
       title: 'Gagal memuat data',
@@ -66,8 +76,15 @@ async function handleToggleProductActive(product: Product) {
   const newStatus = !product.is_active
 
   async function performToggle(status: boolean, isUndo = false) {
-    const success = await toggleActiveInDb(product.id, status)
-    if (!success) return
+    const result = await toggleActiveInDb(product.id, status)
+    if (!result.success) {
+      toast.add({
+        title: 'Gagal mengubah status',
+        description: result.error || 'Terjadi kesalahan',
+        color: 'error'
+      })
+      return
+    }
 
     if (!isUndo) {
       toast.add({
@@ -104,9 +121,19 @@ async function executeDeleteProduct() {
   isDeleteModalOpen.value = false
 
   try {
-    const success = await deleteProduct(product.id)
-    if (success) {
+    const result = await deleteProduct(product.id)
+    if (result.success) {
+      toast.add({
+        title: 'Produk berhasil dihapus',
+        color: 'success'
+      })
       await fetchData()
+    } else {
+      toast.add({
+        title: 'Gagal menghapus produk',
+        description: result.error || 'Terjadi kesalahan',
+        color: 'error'
+      })
     }
   } finally {
     productToDelete.value = null

@@ -5,9 +5,13 @@ definePageMeta({
 
 const { productSales: salesData, loading, fetchProductSales } = useReports()
 const period = ref<'daily' | 'weekly' | 'monthly'>('monthly')
+const toast = useToast()
 
-function loadData() {
-  fetchProductSales(period.value)
+async function loadData() {
+  const result = await fetchProductSales(period.value)
+  if (!result.success) {
+    toast.add({ title: 'Gagal memuat data penjualan produk', description: result.error || 'Terjadi kesalahan.', color: 'error' })
+  }
 }
 
 watch(period, () => {
