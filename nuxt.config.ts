@@ -4,8 +4,54 @@ export default defineNuxtConfig({
     '@nuxt/eslint',
     '@nuxt/ui',
     '@nuxtjs/supabase',
-    '@pinia/nuxt'
+    '@pinia/nuxt',
+    '@vite-pwa/nuxt'
   ],
+
+  pwa: {
+    registerType: 'autoUpdate',
+    manifest: {
+      name: 'WarungKu POS',
+      short_name: 'WarungKu',
+      theme_color: '#10b981',
+      background_color: '#18181b',
+      display: 'standalone',
+      icons: [
+        {
+          src: '/pwa-192x192.svg',
+          sizes: '192x192',
+          type: 'image/svg+xml',
+          purpose: 'any maskable'
+        },
+        {
+          src: '/pwa-512x512.svg',
+          sizes: '512x512',
+          type: 'image/svg+xml',
+          purpose: 'any maskable'
+        }
+      ]
+    },
+    workbox: {
+      navigateFallback: '/',
+      globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
+      runtimeCaching: [
+        {
+          urlPattern: /^https?:\/\/.*\/(products|categories).*/i,
+          handler: 'NetworkFirst',
+          options: {
+            cacheName: 'api-cache',
+            expiration: {
+              maxEntries: 100,
+              maxAgeSeconds: 60 * 60 * 24 * 7, // 1 week
+            },
+            cacheableResponse: {
+              statuses: [0, 200]
+            }
+          }
+        }
+      ]
+    }
+  },
 
   devtools: {
     enabled: true

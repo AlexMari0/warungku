@@ -6,6 +6,15 @@ const route = useRoute()
 const colorMode = useColorMode()
 
 const isSidebarExpanded = ref(true)
+const isOnline = ref(true)
+
+onMounted(() => {
+  if (import.meta.client) {
+    isOnline.value = navigator.onLine
+    window.addEventListener('online', () => { isOnline.value = true })
+    window.addEventListener('offline', () => { isOnline.value = false })
+  }
+})
 
 const displayUser = computed(() => {
   return user.value
@@ -94,10 +103,21 @@ const friendlyName = computed(() => {
             leave-from-class="opacity-100 translate-x-0"
             leave-to-class="opacity-0 translate-x-2"
           >
-            <span
-              v-if="isSidebarExpanded"
-              class="font-bold text-lg text-default tracking-tight whitespace-nowrap"
-            >WarungKu</span>
+            <div v-if="isSidebarExpanded" class="flex flex-col">
+              <span class="font-bold text-lg text-default tracking-tight whitespace-nowrap leading-none">WarungKu</span>
+              <transition
+                enter-active-class="transition-[opacity,transform] duration-300"
+                leave-active-class="transition-[opacity,transform] duration-200"
+                enter-from-class="opacity-0 -translate-y-1"
+                enter-to-class="opacity-100 translate-y-0"
+                leave-from-class="opacity-100 translate-y-0"
+                leave-to-class="opacity-0 -translate-y-1"
+              >
+                <span v-if="!isOnline" class="text-[10px] text-error font-bold uppercase tracking-wider flex items-center gap-1 mt-1">
+                  <UIcon name="i-lucide-wifi-off" class="size-3" /> Offline
+                </span>
+              </transition>
+            </div>
           </transition>
         </div>
 
@@ -273,7 +293,7 @@ const friendlyName = computed(() => {
               class="ring-2 ring-primary/20"
             />
             <!-- Pulsing Connection Status Badge -->
-            <span class="absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-zinc-900 animate-pulse" />
+            <span class="absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-zinc-900" :class="isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-error'" />
           </div>
           <transition
             enter-active-class="transition-[width,opacity] duration-300 overflow-hidden"
@@ -290,9 +310,9 @@ const friendlyName = computed(() => {
               <span class="text-sm font-bold text-default truncate">{{ friendlyName }}</span>
               <div class="flex items-center gap-1.5">
                 <span class="text-[10px] text-muted font-medium truncate uppercase tracking-wider">Admin Manager</span>
-                <span class="text-[9px] text-emerald-500 font-semibold tracking-wider flex items-center gap-0.5">
-                  <span class="w-1 h-1 rounded-full bg-emerald-500 shrink-0" />
-                  Online
+                <span class="text-[9px] font-semibold tracking-wider flex items-center gap-0.5" :class="isOnline ? 'text-emerald-500' : 'text-error'">
+                  <span class="w-1 h-1 rounded-full shrink-0" :class="isOnline ? 'bg-emerald-500' : 'bg-error'" />
+                  {{ isOnline ? 'Online' : 'Offline' }}
                 </span>
               </div>
             </div>
