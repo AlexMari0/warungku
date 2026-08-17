@@ -3,25 +3,48 @@ name: ci
 on: push
 
 jobs:
-  ci:
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        node: [22]
-
+  backend-checks:
+    name: Backend Go Checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Verify Dependencies
+        run: go mod verify
+
+      - name: Run Go Vet
+        run: make vet
+
+      - name: Build Go Backend
+        run: make build
+
+      # Note: Integration tests requiring Supabase secrets are excluded here.
+
+  frontend-checks:
+    name: Frontend Nuxt Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
 
       - name: Install node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version: 20
           cache: pnpm
 
       - name: Install dependencies
@@ -32,3 +55,8 @@ jobs:
 
       - name: Typecheck
         run: pnpm run typecheck
+
+      - name: Build Nuxt App
+        run: pnpm run build
+
+      # Note: E2E Playwright tests are excluded here because they require Supabase secrets to login
