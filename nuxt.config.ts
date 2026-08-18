@@ -61,6 +61,7 @@ export default defineNuxtConfig({
     dirs: [
       'core/composables/**',
       'features/**/composables/**',
+      'features/**/stores/**',
     ]
   },
 

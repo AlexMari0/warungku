@@ -10,8 +10,23 @@ const toast = useToast()
 
 const { products, fetchProducts, fetchSalesFrequency } = useProducts()
 const { categories, fetchCategories } = useCategories()
-const { cart, addToCart, increaseQty, decreaseQty, removeFromCart, clearCart, cartSubtotal, totalCartItemsCount } = useCart()
-const { processingCheckout, processCheckout } = useCheckout()
+const posStore = usePOSStore()
+const {
+  cart,
+  selectedCustomerId,
+  orderNotes,
+  discountType,
+  discountValue,
+  paymentMethod,
+  amountPaid,
+  processingCheckout,
+  cartSubtotal,
+  totalCartItemsCount,
+  discountAmount,
+  cartTotal,
+  changeAmount,
+  quickCashAmounts
+} = storeToRefs(posStore)
 const { customers, fetchCustomers } = useCustomers()
 
 // POS UI State
@@ -20,13 +35,6 @@ const completedOrder = ref<Order | null>(null)
 // POS State
 const loading = ref(true)
 const salesFrequency = ref<Record<string, number>>({})
-
-const selectedCustomerId = ref<string | undefined>('general')
-const orderNotes = ref('')
-const discountType = ref<'rp' | 'percent'>('rp')
-const discountValue = ref<number>(0)
-const paymentMethod = ref<PaymentMethod>('cash')
-const amountPaid = ref<number | null>(null)
 const isAddCustomerOpen = ref(false)
 const hasAddCustomerOpened = ref(false)
 watch(isAddCustomerOpen, (val) => {
@@ -42,47 +50,6 @@ const bestSellers = computed(() => {
   return [...products.value]
     .sort((a, b) => (salesFrequency.value[b.id] || 0) - (salesFrequency.value[a.id] || 0))
     .slice(0, 4)
-})
-
-const discountAmount = computed(() => {
-  if (discountType.value === 'percent') {
-    return Math.round((cartSubtotal.value * (discountValue.value || 0)) / 100)
-  }
-  return discountValue.value || 0
-})
-
-const cartTotal = computed(() => {
-  const sum = cartSubtotal.value - discountAmount.value
-  return sum < 0 ? 0 : sum
-})
-
-const changeAmount = computed(() => {
-  if (amountPaid.value === null || amountPaid.value < cartTotal.value) return 0
-  return amountPaid.value - cartTotal.value
-})
-
-const quickCashAmounts = computed(() => {
-  const total = cartTotal.value
-  if (total <= 0) return [10000, 20000, 50000, 100000]
-
-  const presets = new Set<number>()
-  presets.add(total)
-
-  const bills = [1000, 2000, 5000, 10000, 20000, 50000, 100000]
-  for (const b of bills) {
-    if (b > total) {
-      presets.add(b)
-      break
-    }
-  }
-
-  const roundedUp = Math.ceil(total / 10000) * 10000
-  presets.add(roundedUp)
-
-  const roundedUp50 = Math.ceil(total / 50000) * 50000
-  presets.add(roundedUp50)
-
-  return Array.from(presets).sort((a, b) => a - b)
 })
 
 async function fetchPOSContext() {
@@ -116,7 +83,7 @@ function onCustomerAdded(newCust: Customer) {
 }
 
 function handleAddToCart(product: Product) {
-  const result = addToCart(product)
+  const result = posStore.addToCart(product)
   if (!result.success) {
     toast.add({ title: 'Perhatian', description: result.error, color: 'warning' })
   } else {
@@ -125,22 +92,14 @@ function handleAddToCart(product: Product) {
 }
 
 function handleIncreaseQty(item: CartItem) {
-  const result = increaseQty(item)
+  const result = posStore.increaseQty(item)
   if (!result.success) {
     toast.add({ title: 'Perhatian', description: result.error, color: 'warning' })
   }
 }
 
 async function handleCheckout() {
-  const result = await processCheckout({
-    cart: cart.value,
-    paymentMethod: paymentMethod.value,
-    amountPaid: amountPaid.value,
-    cartTotal: cartTotal.value,
-    selectedCustomerId: selectedCustomerId.value ?? null,
-    discountAmount: discountAmount.value,
-    orderNotes: orderNotes.value
-  })
+  const result = await posStore.processCheckout()
 
   if (result.success && result.data) {
     completedOrder.value = result.data
@@ -153,13 +112,7 @@ async function handleCheckout() {
 }
 
 function resetPOSRegister() {
-  clearCart()
-  selectedCustomerId.value = 'general'
-  orderNotes.value = ''
-  discountValue.value = 0
-  discountType.value = 'rp'
-  amountPaid.value = null
-  paymentMethod.value = 'cash'
+  posStore.resetSession()
   completedOrder.value = null
   isReceiptOpen.value = false
 }
@@ -186,8 +139,8 @@ onMounted(() => {
         :total-count="totalCartItemsCount"
         :best-sellers="bestSellers"
         @increase-qty="handleIncreaseQty"
-        @decrease-qty="decreaseQty"
-        @remove-from-cart="removeFromCart"
+        @decrease-qty="posStore.decreaseQty"
+        @remove-from-cart="posStore.removeFromCart"
         @reset-cart="resetPOSRegister"
         @add-to-cart="handleAddToCart"
       />
