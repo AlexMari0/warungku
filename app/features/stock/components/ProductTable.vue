@@ -111,12 +111,37 @@ const paginatedProducts = computed(() => {
       <!-- Table Loader -->
       <div
         v-if="loading"
-        class="flex items-center justify-center py-20"
+        class="flex flex-col w-full"
       >
-        <UIcon
-          name="i-lucide-loader-2"
-          class="animate-spin text-primary size-8"
-        />
+        <div class="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 py-3.5 px-6 flex items-center justify-between">
+          <USkeleton class="h-4 w-24 bg-zinc-200 dark:bg-zinc-700" />
+          <div class="flex gap-10">
+            <USkeleton class="h-4 w-16 bg-zinc-200 dark:bg-zinc-700" />
+            <USkeleton class="h-4 w-16 bg-zinc-200 dark:bg-zinc-700" />
+            <USkeleton class="h-4 w-16 bg-zinc-200 dark:bg-zinc-700" />
+            <USkeleton class="h-4 w-24 bg-zinc-200 dark:bg-zinc-700" />
+          </div>
+        </div>
+        <div class="divide-y divide-zinc-100 dark:divide-zinc-800/80">
+          <div v-for="i in 5" :key="i" class="py-3 px-6 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3 w-[250px] shrink-0">
+              <USkeleton class="size-10 rounded-xl shrink-0" />
+              <div class="flex flex-col gap-1.5 w-full">
+                <USkeleton class="h-4 w-3/4" />
+                <USkeleton class="h-3 w-1/2" />
+              </div>
+            </div>
+            <USkeleton class="h-6 w-24 rounded-full" />
+            <USkeleton class="h-4 w-20" />
+            <USkeleton class="h-4 w-20" />
+            <USkeleton class="h-4 w-12" />
+            <USkeleton class="h-5 w-10 rounded-full" />
+            <div class="flex gap-3">
+              <USkeleton class="size-7 rounded-lg" />
+              <USkeleton class="size-7 rounded-lg" />
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Empty State -->

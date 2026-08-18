@@ -88,7 +88,7 @@ const emit = defineEmits<{
           <tr
             v-for="m in movements"
             :key="m.id"
-            class="hover:bg-muted/10 transition-colors"
+            class="hover:bg-muted/10 active:bg-muted/20 transition-colors cursor-pointer"
           >
             <!-- Timestamp -->
             <td class="py-4 px-6 text-sm text-toned shrink-0 font-medium">

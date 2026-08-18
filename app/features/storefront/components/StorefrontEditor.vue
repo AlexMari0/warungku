@@ -62,7 +62,7 @@ function onCustomColorChange(e: Event) {
           <span class="text-xs font-mono font-bold uppercase tracking-wider" :class="[storefront.is_published ? 'text-emerald-500' : 'text-muted']">
             {{ storefront.is_published ? 'Terbit (Publik)' : 'Draf (Sembunyi)' }}
           </span>
-          <UToggle
+          <USwitch
             v-model="storefront.is_published"
             size="md"
             color="success"

@@ -266,7 +266,7 @@ const friendlyName = computed(() => {
                     class="truncate flex-1 whitespace-nowrap"
                   >Mode Gelap</span>
                 </transition>
-                <UToggle
+                <USwitch
                   v-if="isSidebarExpanded"
                   :model-value="colorMode.preference === 'dark'"
                   size="sm"

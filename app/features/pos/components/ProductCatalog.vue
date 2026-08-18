@@ -105,12 +105,22 @@ const filteredProducts = computed(() => {
     <div class="flex-grow overflow-y-auto min-h-0 pr-1">
       <div
         v-if="loading"
-        class="flex items-center justify-center h-full"
+        class="grid grid-cols-3 md:grid-cols-4 gap-3"
       >
-        <UIcon
-          name="i-lucide-loader-2"
-          class="animate-spin text-primary size-10"
-        />
+        <div v-for="i in 8" :key="i" class="bg-muted/10 border border-default/40 rounded-2xl p-3 flex flex-col justify-between gap-3 h-[180px] sm:h-[200px]">
+          <div class="flex flex-col gap-2">
+            <USkeleton class="w-full h-20 sm:h-24 rounded-xl" />
+            <USkeleton class="h-4 w-3/4 mt-1" />
+            <USkeleton class="h-3 w-1/2" />
+          </div>
+          <div class="flex items-end justify-between mt-auto">
+            <div class="flex flex-col gap-1.5 w-1/2">
+              <USkeleton class="h-2 w-full" />
+              <USkeleton class="h-4 w-3/4" />
+            </div>
+            <USkeleton class="size-10 rounded-xl" />
+          </div>
+        </div>
       </div>
 
       <div

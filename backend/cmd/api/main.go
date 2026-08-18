@@ -82,7 +82,7 @@ func main() {
 	productHandler := handler.NewProductHandler(productSvc)
 	customerHandler := handler.NewCustomerHandler(customerSvc)
 	stockMovementHandler := handler.NewStockMovementHandler(stockMovementSvc)
-	checkoutHandler := handler.NewCheckoutHandler(checkoutSvc)
+	checkoutHandler := handler.NewCheckoutHandler(checkoutSvc, reportSvc)
 	storefrontHandler := handler.NewStorefrontHandler(storefrontSvc)
 	reportHandler := handler.NewReportHandler(reportSvc)
 	aiHandler := handler.NewAIHandler(aiSvc)

@@ -58,16 +58,24 @@ func main() {
 	catRepo := repo.NewCategoryRepo(db)
 	prodRepo := repo.NewProductRepo(db)
 	stockRepo := repo.NewStockMovementRepo(db)
+	customerRepo := repo.NewCustomerRepo(db)
+	orderRepo := repo.NewOrderRepo(db)
+	reportRepo := repo.NewReportRepo(db)
 
 	// Initialize Services
 	catSvc := service.NewCategoryService(catRepo)
 	prodSvc := service.NewProductService(prodRepo, stockRepo)
+	customerSvc := service.NewCustomerService(customerRepo)
+	checkoutSvc := service.NewCheckoutService(orderRepo)
+	reportSvc := service.NewReportService(reportRepo)
 
 	svcs := &seedcore.Services{
 		DB:       db,
 		Category: catSvc,
 		Product:  prodSvc,
-		// Instantiate other services as needed
+		Customer: customerSvc,
+		Checkout: checkoutSvc,
+		Report:   reportSvc,
 	}
 
 	runner := seedcore.NewRunner(svcs)

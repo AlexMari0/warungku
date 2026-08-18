@@ -30,3 +30,14 @@
   --ui-border-muted: #1f1f23; /* very soft Zinc-900/Zinc-800 borders for subtle dividers */
 }
 
+/* Page Transitions */
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.page-enter-from,
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+

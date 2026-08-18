@@ -1,22 +1,26 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"strconv"
+	"time"
 	"warungku-backend/internal/apperror"
 	"warungku-backend/internal/middleware"
 	"warungku-backend/internal/model"
 	"warungku-backend/internal/service"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
 type CheckoutHandler struct {
-	svc *service.CheckoutService
+	svc       *service.CheckoutService
+	reportSvc *service.ReportService
 }
 
-func NewCheckoutHandler(svc *service.CheckoutService) *CheckoutHandler {
-	return &CheckoutHandler{svc: svc}
+func NewCheckoutHandler(svc *service.CheckoutService, reportSvc *service.ReportService) *CheckoutHandler {
+	return &CheckoutHandler{svc: svc, reportSvc: reportSvc}
 }
 
 func (h *CheckoutHandler) Register(g *echo.Group) {
@@ -38,6 +42,17 @@ func (h *CheckoutHandler) Process(c echo.Context) error {
 	if err != nil {
 		return err
 	}
+
+	// Asynchronously trigger analytics refresh for today
+	go func(mID uuid.UUID) {
+		bgCtx := context.Background()
+		today := time.Now().Format("2006-01-02")
+		if err := h.reportSvc.RefreshAnalytics(bgCtx, mID, today); err != nil {
+			// Just log the error, don't break the flow
+			_ = err
+		}
+	}(merchantID)
+
 	return c.JSON(http.StatusOK, result)
 }
 
